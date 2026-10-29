@@ -1,0 +1,29 @@
+[build]
+  command = "npm run build"
+  publish = "web"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Always fetch the latest app code (it's small), cache icons and vendor files.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "same-origin"
+    Permissions-Policy = "camera=(self)"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/runtime.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/vendor/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
