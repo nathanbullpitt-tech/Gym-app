@@ -3,8 +3,22 @@
 // backed by Netlify Identity, Netlify Database (via /api/data), the AI Gateway (via /api/ai) and Blobs (via /api/photo).
 import {
   login, signup, logout, getUser, handleAuthCallback, requestPasswordRecovery,
-  updateUser, refreshSession, getSettings, acceptInvite,
+  updateUser, refreshSession, getSettings, acceptInvite, onAuthChange,
 } from "@netlify/identity"
+
+/* ---------------- stay signed in ----------------
+   Netlify Identity sets its login cookies as session cookies, which iOS deletes when a home-screen app
+   is swiped closed. Re-save them with a long lifetime so the app stays signed in; the library refreshes
+   the short-lived access token from the refresh token as needed. */
+const KEEP_S = 60 * 24 * 3600
+const readCookie = n => { const m = document.cookie.match(new RegExp("(?:^|; )" + n + "=([^;]*)")); return m ? decodeURIComponent(m[1]) : null }
+function persistLogin() {
+  for (const n of ["nf_jwt", "nf_refresh"]) {
+    const v = readCookie(n)
+    if (v) document.cookie = `${n}=${encodeURIComponent(v)}; path=/; secure; samesite=lax; max-age=${KEEP_S}`
+  }
+}
+onAuthChange((ev) => { if (ev === "logout") return; setTimeout(persistLogin, 0) })
 
 /* ---------------- helpers ---------------- */
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -474,6 +488,9 @@ function friendly(e) {
 
 async function signedIn(user) {
   if (!user) { showAuth("login"); return }
+  persistLogin()
+  try { await refreshSession() } catch (e) {} // only refreshes if the access token is about to expire
+  persistLogin()
   me = { id: user.id, email: user.email || "" }
   // Load cached data first so the app opens instantly, then fetch fresh.
   const cached = lsGet(cacheKey())
