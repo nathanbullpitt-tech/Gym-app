@@ -742,13 +742,16 @@ function expenditure(){
     const D=Math.max(1,daysBetween(win[0].d,win[win.length-1].d)),dKg=win[win.length-1].trend-win[0].trend;
     const avgIn=intake.reduce((a,b)=>a+b,0)/intake.length;
     data=Math.max(1200,Math.min(6000,avgIn-dKg*7700/D));
-    conf=Math.min(1,intake.length/21)*Math.min(1,D/21);
+    // Days not marked complete may hide untracked eating (a blow-out), which would make the burn estimate
+    // read low. The fewer complete days in the window, the more we lean on the formula estimate instead.
+    const cover=Math.min(1,intake.length/(D+1));
+    conf=Math.min(1,intake.length/21)*Math.min(1,D/21)*cover;
   }
   const est=Math.round((data==null?prior:conf*data+(1-conf)*prior)/10)*10;
   const deficit=lastKg*((+st.goalRate||0.75)/100)*7700/7;
   const floor=Math.max(male?1500:1200,Math.round(est*0.65/10)*10);
   const target=Math.max(floor,Math.round((est-deficit)/10)*10);
-  return {est,conf,logged:intake.length,weighIns,target,usedFloor:target===floor,lastKg,hasHeight:!!+st.heightCm};
+  return {est,conf,logged:intake.length,span:Math.max(1,daysBetween(wS,end)+1),weighIns,target,usedFloor:target===floor,lastKg,hasHeight:!!+st.heightCm};
 }
 function splitMacros(cal){const p=r0(S.settings.p),f=r0(cal*0.25/9),c=Math.max(0,r0((cal-p*4-f*9)/4));return {cal,p,c,f}}
 function weekCard(){
@@ -764,7 +767,7 @@ function expCard(){
   return `<div class="card ex"><div class="row between"><div class="eyebrow">Expenditure</div>${due?`<span class="pill warn">Weekly check-in due</span>`:`<span class="pill">Next check-in ${esc(fmtDate(addDays(st.lastCheckIn,7),{weekday:"short",day:"numeric",month:"short"}))}</span>`}</div>
   <div class="big num" style="font-size:40px">${x.est.toLocaleString()}<small>cal/day</small></div>
   <div class="row small muted"><span>Confidence</span><div class="track" style="height:6px;flex:1"><span style="width:${Math.round(x.conf*100)}%;background:var(--good)"></span></div><span class="num">${Math.round(x.conf*100)}%</span></div>
-  <div class="small muted">${learning?`Starting estimate from your stats${x.hasHeight?"":". Add your height in Targets to sharpen it"}. It learns what you really burn from your food logs and weigh-ins: ${x.logged} of 21 days logged and ${x.weighIns} weigh-ins so far.`:`Worked out from ${x.logged} logged days and your weight trend over the last 4 weeks.`}</div>
+  <div class="small muted">${learning?`Starting estimate from your stats${x.hasHeight?"":". Add your height in Targets to sharpen it"}. It learns what you really burn from your food logs and weigh-ins: ${x.logged} of 21 days marked complete and ${x.weighIns} weigh-ins so far. Only completed days count.`:`Worked out from ${x.logged} completed days and your weight trend over the last 4 weeks.${x.logged<x.span*0.7?" Several days weren't marked complete, so it leans more on the standard formula until you log full days.":""}`}</div>
   <div class="hint">To lose about ${r1(x.lastKg*(+st.goalRate||0.75)/100)} kg a week, eat <b class="num">${x.target.toLocaleString()} cal</b> a day${x.usedFloor?". Held at a safe minimum":""}.</div>
   ${Math.abs(diff)>=50?`<button class="btn wide" id="applyT">Update my target to ${x.target.toLocaleString()} cal</button>`:`<div class="row between small muted"><span>Your target already matches.</span>${due?`<button class="chip" id="ackT">Mark check-in done</button>`:""}</div>`}</div>`;
 }
@@ -1870,12 +1873,12 @@ function context(){
   if(S.recipes.length)lines.push("Their recipes: "+S.recipes.map(r=>`${r.name} (${r.per.cal} cal, ${r.per.p}p per serve)`).join("; ")+".");
   lines.push(`Today's checklist: weigh-in ${ck.weigh?"done":"not yet"}, food marked complete ${ck.food?"yes":"not yet"}, training ${ck.rest?"rest day":ck.train?"done":"not yet"}. Checklist streak: ${streak()} days.`);
   if(S.program)lines.push(`Current training plan: ${S.program.name}, ${S.program.weeks} weeks from ${S.program.start}. ${S.program.summary} Progression: ${S.program.progression}`);
-  lines.push(`Adaptive expenditure estimate: ${x.est} cal/day (confidence ${Math.round(x.conf*100)}%, from ${x.logged} logged days). Suggested target for his chosen pace: ${x.target} cal.`);
+  lines.push(`Adaptive expenditure estimate: ${x.est} cal/day (confidence ${Math.round(x.conf*100)}%, from ${x.logged} complete days out of the last ${x.span}). Suggested target for his chosen pace: ${x.target} cal.`);
   const up=Object.keys(S.plan).filter(d=>d>=t&&d<=addDays(t,7)).sort();
   lines.push(`Planned sessions next 7 days: ${up.map(d=>d+" "+S.plan[d].name).join("; ")||"none"}. Saved workouts: ${S.templates.map(x=>x.name+" ("+(x.exercises||[]).map(e=>e.name).join(", ")+")").join("; ")||"none"}.`);
   return lines.join("\n");
 }
-function rules(){const n=S.settings.name?String(S.settings.name).split(" ")[0]:"the user";return `You are ${n}'s personal trainer and nutrition coach, built into their food, training and weight tracking app. You can see their logged data below. A day only counts as a full day of eating when it is marked COMPLETE. PARTIAL days are just what got logged: never treat a partial day as their total intake, never say they under-ate or had a big deficit because of one, and leave partial days out of averages. If a partial day matters to your advice, ask what else they ate. Today is still in progress, so treat it as so far. Coach like a good in-person PT: direct, specific, encouraging without flattery, and honest when they are off track. Call them ${n}.
+function rules(){const n=S.settings.name?String(S.settings.name).split(" ")[0]:"the user";return `You are ${n}'s personal trainer and nutrition coach, built into their food, training and weight tracking app. You can see their logged data below. A day only counts as a full day of eating when it is marked COMPLETE. PARTIAL days are just what got logged. A partial day could be a light day or a big day or blow-out that was not fully logged, so do not assume either: never treat it as their total intake, never say they under-ate or had a big deficit because of one, and leave partial days out of averages. If weight jumps after partial days, untracked eating, salt and carbs are the likely reasons, so say that plainly rather than suggesting their metabolism changed. If a partial day matters to your advice, ask what else they ate. Today is still in progress, so treat it as so far. Coach like a good in-person PT: direct, specific, encouraging without flattery, and honest when they are off track. Call them ${n}.
 Rules:
 - Ground advice in their actual numbers. Mention specific figures when useful.
 - Evidence-based. Fat loss target around 0.5 to 1% of bodyweight per week. Keep protein high and keep lifting to hold muscle. The first 1 to 2 weeks of a deficit drop extra water and glycogen, so fast early losses are not all fat: never cut calories or steps because of them, and expect the rate to slow after that.
