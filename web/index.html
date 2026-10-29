@@ -277,6 +277,10 @@ input.i.upkg{border-color:var(--good);font-weight:600}
 .amt .iconbtn{width:44px;height:44px;font-size:22px;line-height:1}
 .amt .i{min-width:0}
 .amtmac{font-size:14px;color:var(--muted)}.amtmac b{color:var(--ink);font-size:18px}
+.np summary{list-style:none;cursor:pointer}.np summary::-webkit-details-marker{display:none}
+.np-t{display:flex;flex-direction:column;border-top:2px solid var(--ink);margin-top:6px}
+.np-r{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.np-r.sub{padding-left:14px;color:var(--muted)}
 .scanov{position:fixed;inset:0;z-index:2000;background:#000;display:flex;flex-direction:column}
 .scanov video{flex:1;width:100%;height:100%;object-fit:cover;min-height:0}
 .scanov .frame{position:absolute;left:8%;right:8%;top:38%;height:22%;border:3px solid var(--accent);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);pointer-events:none}
@@ -342,7 +346,21 @@ function write(path,fn){
 }
 function setDayFoods(date,foods){S.days[date]={...(S.days[date]||{}),foods};render();write("days/"+date,r=>r.set(S.days[date]))}
 function dayFoods(date){return (S.days[date]&&S.days[date].foods)||[]}
-function totals(foods){return foods.reduce((a,f)=>({cal:a.cal+r0(f.cal),p:a.p+r0(f.p),c:a.c+r0(f.c),f:a.f+r0(f.f)}),{cal:0,p:0,c:0,f:0})}
+const XN=["fib","sug","sat","na"];
+function xn(src,m){m=m==null?1:m;const o={};for(const k of XN){const v=src&&src[k];if(v!=null&&v!==""&&isFinite(+v))o[k]=k==="na"?r0(+v*m):r1(+v*m)}return o}
+function fibTarget(){const s=S.settings;return +s.fib||(s.sex==="f"?25:30)}
+function nutPanel(foods,t){
+  if(!foods.length)return "";
+  const kj=Math.round(t.cal*4.184),ft=fibTarget(),row=(l,v,u,sub,k)=>`<div class="np-r${sub?" sub":""}"><span>${l}</span><span class="num">${k&&t.has[k]<t.n?`<span class="muted small">~</span>`:""}${v}${u}</span></div>`;
+  const part=XN.some(k=>t.has[k]<t.n);
+  return `<details class="card np"${S.npOpen?" open":""}><summary class="row between"><span class="eyebrow">Nutrition panel</span><span class="small muted num">Fibre <b style="color:var(--ink)">${t.fib}g</b> / ${ft}g</span></summary>
+  <div class="track" style="margin:8px 0 4px"><span style="width:${Math.min(100,t.fib/ft*100)}%;background:var(--good)"></span></div>
+  <div class="np-t">${row("Energy",kj.toLocaleString()," kJ")}${row("Calories",t.cal.toLocaleString(),"")}${row("Protein",t.p,"g")}${row("Fat, total",t.f,"g")}${row("Saturated",t.sat,"g",1,"sat")}${row("Carbohydrate",t.c,"g")}${row("Sugars",t.sug,"g",1,"sug")}${row("Dietary fibre",t.fib,"g",0,"fib")}${row("Sodium",t.na.toLocaleString(),"mg",0,"na")}</div>
+  ${part?`<div class="small muted">~ means some of today's foods have no figure for that line (quick adds and older entries), so the real total is a bit higher.</div>`:""}</details>`;
+}
+function totals(foods){const a={cal:0,p:0,c:0,f:0,fib:0,sug:0,sat:0,na:0,n:foods.length,has:{fib:0,sug:0,sat:0,na:0}};
+  for(const f of foods){a.cal+=r0(f.cal);a.p+=+f.p||0;a.c+=+f.c||0;a.f+=+f.f||0;for(const k of XN)if(f[k]!=null&&f[k]!==""){a[k]+=+f[k]||0;a.has[k]++}}
+  a.p=r1(a.p);a.c=r1(a.c);a.f=r1(a.f);a.fib=r1(a.fib);a.sug=r1(a.sug);a.sat=r1(a.sat);a.na=r0(a.na);return a}
 
 function applyTheme(t){t=t||{};const c=t.c==="pink"?"pink":"blue",m=["light","dark"].includes(t.m)?t.m:"auto",r=document.documentElement;if(c==="blue"&&m==="auto"){delete r.dataset.kcc;delete r.dataset.kcm}else{r.dataset.kcc=c;r.dataset.kcm=m}try{localStorage.setItem("kc-theme",JSON.stringify({c,m}))}catch(e){}
   {const pk=c==="pink",set=(id,h)=>{const l=document.getElementById(id);if(l&&l.getAttribute("href")!==h)l.setAttribute("href",h)};set("kcManifest",pk?"/manifest-pink.webmanifest":"/manifest.webmanifest");set("kcIcon",pk?"/icon-pink.svg":"/icon.svg");set("kcTouch",pk?"/apple-touch-icon-pink.png":"/apple-touch-icon.png");const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=pk?"#0b0609":"#06080c"}}
@@ -425,12 +443,13 @@ function renderToday(){
   <div class="card"><div class="hero-grid">${ring(t.cal/st.cal,left<0?"var(--bad)":"var(--accent)",164,14,`<div class="ring-big num">${Math.abs(left).toLocaleString()}</div><div class="ring-lbl">${left>=0?"cal left":"cal over"}</div>`)}
   <div class="hero-macros">${[["Protein","p","--mp"],["Carbs","c","--mc"],["Fat","f","--mf"]].map(([n,k,col])=>`<div class="hm">${ring(t[k]/st[k],`var(${col})`,46,7,"")}<div style="min-width:0"><div class="eyebrow">${n}</div><div class="hm-v num">${t[k]}<span> / ${st[k]}g</span></div></div></div>`).join("")}</div></div>
   <div class="hero-foot num"><span>Eaten <b>${t.cal.toLocaleString()}</b></span><span>Target <b>${Number(st.cal).toLocaleString()}</b></span></div></div>`;
-  if(t.p<st.p&&isToday&&foods.length){const need=st.p-t.p;h+=`<div class="small muted" style="padding:0 4px">${need}g protein to go today.</div>`}
+  if(t.p<st.p&&isToday&&foods.length){const need=r1(st.p-t.p);h+=`<div class="small muted" style="padding:0 4px">${need}g protein to go today.</div>`}
+  h+=nutPanel(foods,t);setTimeout(()=>{const d=document.querySelector("details.np");if(d)d.ontoggle=()=>{S.npOpen=d.open}},0);
   h+=waterCard(S.date);
   MEALS.forEach(m=>{
     const items=foods.filter(f=>f.meal===m),mt=totals(items),ym=yest.filter(f=>f.meal===m);
     h+=`<div class="card meal"><div class="meal-h"><div class="t">${m}</div><div class="c num">${mt.cal?mt.cal+" cal":""}</div>${items.length?`<button class="chip" data-copymeal="${m}">Copy</button>`:""}<button class="add" data-add="${m}">+ Add</button></div>`;
-    if(items.length)h+=`<div class="items">${items.map(f=>`<div class="item"><button class="n" data-edit="${f.id}" aria-label="Edit ${esc(f.name)}"><div>${esc(f.name)}</div><div class="m num">P ${r0(f.p)} · C ${r0(f.c)} · F ${r0(f.f)}</div></button><div class="k num">${r0(f.cal)}</div><button class="x" data-del="${f.id}" aria-label="Remove ${esc(f.name)}">×</button></div>`).join("")}</div>`;
+    if(items.length)h+=`<div class="items">${items.map(f=>`<div class="item"><button class="n" data-edit="${f.id}" aria-label="Edit ${esc(f.name)}"><div>${esc(f.name)}</div><div class="m num">P ${r1(f.p)} · C ${r1(f.c)} · F ${r1(f.f)}</div></button><div class="k num">${r0(f.cal)}</div><button class="x" data-del="${f.id}" aria-label="Remove ${esc(f.name)}">×</button></div>`).join("")}</div>`;
     else if(ym.length)h+=`<button class="ghost" data-repeat="${m}">Repeat yesterday: ${esc(ym[0].name)}${ym.length>1?" + "+(ym.length-1)+" more":""}</button>`;
     h+=`</div>`;
   });
@@ -476,11 +495,11 @@ function openAddFood(meal){
       const draw=async()=>{const v=q.value.trim().toLowerCase();if(v.length<2){out.innerHTML="";return}
         const words=v.split(/\s+/),hit=n=>{const l=n.toLowerCase();return words.every(w=>l.includes(w))};
         const mine=S.foods.filter(f=>hit(f.name)).slice(0,6).map(f=>({k:"s"+f.id,name:f.name,per:f.serving?`per ${f.serving}`:"per serve",cal:f.cal,p:f.p,c:f.c,f:f.f,saved:f}));
-        const db=(await afcdLoad()).filter(x=>hit(x[0])).sort((a,b)=>a[0].length-b[0].length).slice(0,20).map((x,i)=>({k:"a"+i+x[0].length,name:x[0],per:"per 100g",cal:x[1],p:x[2],c:x[3],f:x[4],g100:true}));
+        const db=(await afcdLoad()).filter(x=>hit(x[0])).sort((a,b)=>a[0].length-b[0].length).slice(0,20).map((x,i)=>({k:"a"+i+x[0].length,name:x[0],per:"per 100g",cal:x[1],p:x[2],c:x[3],f:x[4],...(x.length>5?{fib:x[5],sug:x[6],sat:x[7],na:x[8]}:{}),g100:true}));
         const all=[...mine,...db];draw.all=all;
         out.innerHTML=all.length?`<div class="card" style="padding:4px 16px"><div class="list">${all.map(x=>`<div class="li" style="flex-wrap:wrap"><button class="open" data-fk="${x.k}"><div>${esc(x.name)}${x.saved?' <span class="pill">Saved</span>':""}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)} ${esc(x.per)}</div></button>${open===x.k?`<div class="ex" style="width:100%;padding-bottom:12px"><div id="famt" class="ex"></div><button class="btn wide" id="fadd">Add to ${meal}</button></div>`:""}</div>`).join("")}</div></div>`:`<div class="empty">No match. Try fewer words, or use Scan or Describe.</div>`;
         out.querySelectorAll("[data-fk]").forEach(b=>b.onclick=()=>{open=open===b.dataset.fk?null:b.dataset.fk;draw()});
-        const fa=out.querySelector("#fadd");if(fa){const x=all.find(y=>y.k===open),base=x.saved?savedBase(x.saved):{name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f,g:100,sv:"100g"},get=amountUI(out.querySelector("#famt"),base);
+        const fa=out.querySelector("#fadd");if(fa){const x=all.find(y=>y.k===open),base=x.saved?savedBase(x.saved):{name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f,...xn(x),g:100,sv:"100g"},get=amountUI(out.querySelector("#famt"),base);
           fa.onclick=()=>{const a=get();if(!(a.n>0)){toast("Enter an amount");return}addItems([amtItem(base,a)],false);if(x.saved)write("foods/"+x.saved.id,r=>r.update({used:Date.now()}))}}};
       let t=null;q.oninput=()=>{clearTimeout(t);open=null;t=setTimeout(draw,150)};setTimeout(()=>q.focus(),50)}
     if(mode==="describe"){body.innerHTML=`<label class="f" for="fd">What did you eat?<textarea class="i" id="fd" placeholder="e.g. 200g chicken breast, 1 cup basmati rice, steamed broccoli"></textarea></label><button class="btn wide" id="go">Estimate</button><div id="res"></div>`;
@@ -492,42 +511,43 @@ function openAddFood(meal){
       body.querySelector("#bc").onchange=async e=>{const f=e.target.files[0];if(!f)return;const res=body.querySelector("#res");res.innerHTML=`<div class="empty">Reading barcode…</div>`;const code=await decodeBarcode(f);if(!code){res.innerHTML=`<div class="empty">Couldn't read that barcode. Fill the frame with it in good light, or type the number under the bars.</div>`;return}found(code)};
       body.querySelector("#bcLive").onclick=()=>liveScan(code=>found(code));
       body.querySelector("#bcgo").onclick=()=>{const c=body.querySelector("#bcd").value.replace(/\D/g,"");if(c.length<8){toast("Enter the full barcode number");return}found(c)}}
-    if(mode==="saved"){body.innerHTML=savedExtras()+(S.foods.length?`<div class="card" style="padding:4px 16px"><div class="list">${S.foods.map(f=>`<div class="li"><button class="open" data-pick="${f.id}"><div>${esc(f.name)}</div><div class="small muted num">${r0(f.cal)} cal · P ${r0(f.p)} · C ${r0(f.c)} · F ${r0(f.f)}</div></button><input class="i num" style="width:58px;padding:8px" id="fs-${f.id}" value="1" inputmode="decimal" aria-label="Serves of ${esc(f.name)}"><button class="add" data-pick2="${f.id}">Add</button><button class="x" data-unsave="${f.id}" aria-label="Remove from my foods">×</button></div>`).join("")}</div></div>`:`<div class="empty">Foods you save show up here for one-tap logging. Tick "Save to my foods" when you add something.</div>`);bindSavedExtras(body,meal);
+    if(mode==="saved"){body.innerHTML=savedExtras()+(S.foods.length?`<div class="card" style="padding:4px 16px"><div class="list">${S.foods.map(f=>`<div class="li"><button class="open" data-pick="${f.id}"><div>${esc(f.name)}</div><div class="small muted num">${r0(f.cal)} cal · P ${r1(f.p)} · C ${r1(f.c)} · F ${r1(f.f)}</div></button><input class="i num" style="width:58px;padding:8px" id="fs-${f.id}" value="1" inputmode="decimal" aria-label="Serves of ${esc(f.name)}"><button class="add" data-pick2="${f.id}">Add</button><button class="x" data-unsave="${f.id}" aria-label="Remove from my foods">×</button></div>`).join("")}</div></div>`:`<div class="empty">Foods you save show up here for one-tap logging. Tick "Save to my foods" when you add something.</div>`);bindSavedExtras(body,meal);
       body.querySelectorAll("[data-pick],[data-pick2]").forEach(b=>b.onclick=()=>{const f=S.foods.find(x=>x.id===(b.dataset.pick||b.dataset.pick2));const sv=Number((body.querySelector("#fs-"+f.id)||{}).value)||1;addItems([{name:sv===1?f.name:`${f.name} ×${r1(sv)}`,cal:f.cal*sv,p:f.p*sv,c:f.c*sv,f:f.f*sv}],false);write("foods/"+f.id,r=>r.update({used:Date.now()}))});
       body.querySelectorAll("[data-unsave]").forEach(b=>b.onclick=()=>{S.foods=S.foods.filter(x=>x.id!==b.dataset.unsave);paint();write("foods/"+b.dataset.unsave,r=>r.delete())})}
     if(mode==="quick"){body.innerHTML=`<div class="grid2"><label class="f" for="qc">Calories<input class="i num" id="qc" inputmode="numeric"></label><label class="f" for="qp">Protein g (optional)<input class="i num" id="qp" inputmode="numeric"></label></div><label class="f" for="qn">Label (optional)<input class="i" id="qn" placeholder="Quick add"></label><button class="btn wide" id="go">Add</button>`;
-      body.querySelector("#go").onclick=()=>{const c=r0(body.querySelector("#qc").value);if(!c){toast("Enter the calories");return}addItems([{name:body.querySelector("#qn").value.trim()||"Quick add",cal:c,p:r0(body.querySelector("#qp").value),c:0,f:0}],false)}}
-    if(mode==="manual"){body.innerHTML=`<label class="f" for="mn">Name<input class="i" id="mn" placeholder="Choc brownie protein crisp"></label><div class="grid4">${[["mcal","Cal"],["mp","Protein"],["mc","Carbs"],["mf","Fat"]].map(([i,l])=>`<label class="f" for="${i}">${l}<input class="i num" id="${i}" inputmode="decimal"></label>`).join("")}</div><label class="row small"><input type="checkbox" id="msave"> Save to my foods</label><button class="btn wide" id="go">Add</button>`;
-      body.querySelector("#go").onclick=()=>{const n=body.querySelector("#mn").value.trim();if(!n){toast("Give it a name");return}addItems([{name:n,cal:+body.querySelector("#mcal").value,p:+body.querySelector("#mp").value,c:+body.querySelector("#mc").value,f:+body.querySelector("#mf").value}],body.querySelector("#msave").checked)}}
+      body.querySelector("#go").onclick=()=>{const c=r0(body.querySelector("#qc").value);if(!c){toast("Enter the calories");return}addItems([{name:body.querySelector("#qn").value.trim()||"Quick add",cal:c,p:r1(body.querySelector("#qp").value),c:0,f:0}],false)}}
+    if(mode==="manual"){body.innerHTML=`<label class="f" for="mn">Name<input class="i" id="mn" placeholder="Choc brownie protein crisp"></label><div class="grid4">${[["mcal","Cal"],["mp","Protein"],["mc","Carbs"],["mf","Fat"]].map(([i,l])=>`<label class="f" for="${i}">${l}<input class="i num" id="${i}" inputmode="decimal"></label>`).join("")}</div><label class="f" for="mfib">Fibre g (optional)<input class="i num" id="mfib" inputmode="decimal"></label><label class="row small"><input type="checkbox" id="msave"> Save to my foods</label><button class="btn wide" id="go">Add</button>`;
+      body.querySelector("#go").onclick=()=>{const n=body.querySelector("#mn").value.trim();if(!n){toast("Give it a name");return}addItems([{name:n,cal:+body.querySelector("#mcal").value,p:+body.querySelector("#mp").value,c:+body.querySelector("#mc").value,f:+body.querySelector("#mf").value,...(body.querySelector("#mfib").value!==""?{fib:+body.querySelector("#mfib").value}:{})}],body.querySelector("#msave").checked)}}
   }
   function sgOf(f){const x=String(f.serving||"").match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i);return x?+x[1]:0}
-  function scaled(f,m){return {name:m===1?f.name:`${f.name} ×${r1(m)}`,cal:f.cal*m,p:f.p*m,c:f.c*m,f:f.f*m}}
+  function scaled(f,m){return {name:m===1?f.name:`${f.name} ×${r1(m)}`,cal:f.cal*m,p:f.p*m,c:f.c*m,f:f.f*m,...xn(f,m)}}
   function found(code){
     const res=body.querySelector("#res"),known=S.foods.find(f=>f.barcode===code);
     if(!known){body.querySelector("#res").innerHTML=`<div class="empty">Looking up ${esc(code)}…</div>`;offLookup(code).then(o=>newProduct(code,o));return}
-    res.innerHTML=`<div class="card ex"><div class="eyebrow">Barcode ${esc(code)}</div><div style="font-weight:700">${esc(known.name)}</div><div class="small muted num">Per serving${known.serving?" ("+esc(known.serving)+")":""}: ${r0(known.cal)} cal · P ${r0(known.p)} · C ${r0(known.c)} · F ${r0(known.f)}</div><div id="scAmt" class="ex"></div><button class="btn wide" id="addSc">Add to ${meal}</button></div>`;
+    res.innerHTML=`<div class="card ex"><div class="eyebrow">Barcode ${esc(code)}</div><div style="font-weight:700">${esc(known.name)}</div><div class="small muted num">Per serving${known.serving?" ("+esc(known.serving)+")":""}: ${r0(known.cal)} cal · P ${r1(known.p)} · C ${r1(known.c)} · F ${r1(known.f)}</div><div id="scAmt" class="ex"></div><button class="btn wide" id="addSc">Add to ${meal}</button></div>`;
     const base=savedBase(known),get=amountUI(res.querySelector("#scAmt"),base);
     res.querySelector("#addSc").onclick=()=>{const a=get();if(!(a.n>0)){toast("Enter an amount");return}addItems([amtItem(base,a)],false);write("foods/"+known.id,r=>r.update({used:Date.now()}))};
   }
   function newProduct(code,off){
-    const res=body.querySelector("#res");
+    const res=body.querySelector("#res");let extra={};
     res.innerHTML=`<div class="card ex"><div class="eyebrow">New product · ${esc(code)}</div><div class="small muted">First time scanning this one. ${sample?"Photograph the nutrition panel and Claude fills it in, or enter":"Enter"} the per-serving values. Next time this barcode adds in one tap.</div>
     ${sample?`<label class="f" for="lp">Nutrition panel photo<input class="i" type="file" id="lp" accept="image/*" capture="environment"></label><div id="lpst" class="small muted" hidden></div>`:""}
     <label class="f" for="pn">Product<input class="i" id="pn" placeholder="e.g. Chobani Fit vanilla 170g"></label><label class="f" for="ps">Serving size<input class="i" id="ps" placeholder="e.g. 45g"></label>
     <div class="grid4">${[["cal","Cal"],["p","Protein"],["c","Carbs"],["f","Fat"]].map(([k,l])=>`<label class="f" for="p${k}">${l}<input class="i num" id="p${k}" inputmode="decimal"></label>`).join("")}</div>
+    <label class="f" for="pfib">Fibre g per serving (optional)<input class="i num" id="pfib" inputmode="decimal"></label>
     <label class="f" for="sv">Servings eaten<input class="i num" id="sv" inputmode="decimal" value="1"></label><button class="btn wide" id="addNew">Save and add to ${meal}</button></div>`;
     if(off){res.querySelector(".card .small.muted").textContent="Found in the Open Food Facts database. Check the numbers against the pack, then save. Next time this barcode adds in one tap.";
-      res.querySelector("#pn").value=off.name;res.querySelector("#ps").value=off.serving;["cal","p","c","f"].forEach(k=>res.querySelector("#p"+k).value=off[k]);
+      res.querySelector("#pn").value=off.name;res.querySelector("#ps").value=off.serving;["cal","p","c","f"].forEach(k=>res.querySelector("#p"+k).value=off[k]);if(off.fib!=null)res.querySelector("#pfib").value=off.fib;extra=xn(off);
       const ins=document.createElement("div");ins.className="small muted";ins.textContent=off.note;if(off.note)res.querySelector("#ps").closest("label").after(ins)}
     const lp=res.querySelector("#lp");
     if(lp)lp.onchange=async()=>{const f=lp.files[0];if(!f)return;const st=res.querySelector("#lpst");st.hidden=false;st.textContent="Reading the label…";
-      try{const o=await sample.json(`This photo shows an Australian food product's nutrition information panel, and maybe the front of the pack. Read the PER SERVING column. If energy is only in kJ, convert to calories by dividing by 4.184. If there is no per-serving column, use per 100g and set serving to "100g". Reply with only JSON like {"name":"Brand product and flavour","serving":"45g","cal":180,"p":10,"c":20,"f":6} with integer numbers.`,{images:f});
+      try{const o=await sample.json(`This photo shows an Australian food product's nutrition information panel, and maybe the front of the pack. Read the PER SERVING column. If energy is only in kJ, convert to calories by dividing by 4.184. If there is no per-serving column, use per 100g and set serving to "100g". Reply with only JSON like {"name":"Brand product and flavour","serving":"45g","cal":180,"p":10.2,"c":20.5,"f":6.1,"fib":3.2,"sug":8.4,"sat":2.1,"na":180}. cal is a whole number, macros in grams to 1 decimal place, fib is dietary fibre g, sug is sugars g, sat is saturated fat g, na is sodium mg.`,{images:f});
         if(o&&o.name)res.querySelector("#pn").value=String(o.name).slice(0,80);if(o&&o.serving)res.querySelector("#ps").value=String(o.serving).slice(0,30);
-        ["cal","p","c","f"].forEach(k=>res.querySelector("#p"+k).value=r0(o&&o[k]));st.textContent="Check the numbers against the pack, then save.";
+        ["cal","p","c","f"].forEach(k=>res.querySelector("#p"+k).value=k==="cal"?r0(o&&o[k]):r1(o&&o[k]));extra=xn(o);if(o&&o.fib!=null)res.querySelector("#pfib").value=r1(o.fib);st.textContent="Check the numbers against the pack, then save.";
       }catch(e){st.textContent=sampleErr(e)}};
     res.querySelector("#addNew").onclick=()=>{
       const name=res.querySelector("#pn").value.trim();if(!name){toast("Add the product name");return}
-      const food={name,serving:res.querySelector("#ps").value.trim(),cal:r0(res.querySelector("#pcal").value),p:r0(res.querySelector("#pp").value),c:r0(res.querySelector("#pc").value),f:r0(res.querySelector("#pf").value),barcode:code};
+      const food={name,serving:res.querySelector("#ps").value.trim(),cal:r0(res.querySelector("#pcal").value),p:r1(res.querySelector("#pp").value),c:r1(res.querySelector("#pc").value),f:r1(res.querySelector("#pf").value),...extra,...(res.querySelector("#pfib").value!==""?{fib:r1(res.querySelector("#pfib").value)}:{}),barcode:code};
       const id=uid();S.foods.unshift({id,...food});write("foods/"+id,r=>r.set({...food,used:Date.now()}));
       addItems([scaled(food,Number(res.querySelector("#sv").value)||1)],false);
     };
@@ -536,22 +556,22 @@ function openAddFood(meal){
     if(!text&&!file){toast("Describe what you ate first");return}
     const res=body.querySelector("#res"),go=body.querySelector("#go");go.disabled=true;res.innerHTML=`<div class="empty">Estimating…</div>`;
     const prompt=`Estimate nutrition for a food log entry. Use Australian products and typical portions. Split it into separate items when several foods are listed. ${file?"An image is attached: it is a photo of the meal or of a nutrition label. Estimate the portion shown.":""}
-Reply with only a JSON array, integers only, like: [{"name":"200g chicken breast, grilled","cal":330,"p":62,"c":0,"f":7}]
+Reply with only a JSON array like: [{"name":"200g chicken breast, grilled","cal":330,"p":62.1,"c":0,"f":7.2,"fib":0,"sug":0,"sat":2,"na":150}]. cal is a whole number, other values to 1 decimal place. fib is dietary fibre g, sug is sugars g, sat is saturated fat g, na is sodium mg.
 Entry: ${text||"(see photo)"}`;
     try{
       const out=await sample.json(prompt,file?{images:file}:{modelTier:"quick"});
-      est=(Array.isArray(out)?out:[out]).filter(x=>x&&x.name).map(x=>({name:String(x.name).slice(0,80),cal:r0(x.cal),p:r0(x.p),c:r0(x.c),f:r0(x.f)}));
+      est=(Array.isArray(out)?out:[out]).filter(x=>x&&x.name).map(x=>({name:String(x.name).slice(0,80),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f),...xn(x)}));
       if(!est.length)throw{code:"invalid_json"};
-      res.innerHTML=`<div class="card" style="padding:4px 16px">${est.map((x,i)=>`<label class="est"><input type="checkbox" checked data-i="${i}"><div class="grow" style="flex:1;min-width:0"><div>${esc(x.name)}</div><div class="small muted num">${x.cal} cal · P ${x.p} · C ${x.c} · F ${x.f}</div></div></label>`).join("")}</div><label class="row small" style="margin-top:10px"><input type="checkbox" id="esave"> Save to my foods</label><button class="btn wide" id="addEst" style="margin-top:10px">Add to ${meal}</button><div class="small muted" style="margin-top:6px">Estimates. Switch to Manual if you have the label.</div>`;
+      res.innerHTML=`<div class="card" style="padding:4px 16px">${est.map((x,i)=>`<label class="est"><input type="checkbox" checked data-i="${i}"><div class="grow" style="flex:1;min-width:0"><div>${esc(x.name)}</div><div class="small muted num">${x.cal} cal · P ${x.p} · C ${x.c} · F ${x.f}${x.fib!=null?` · Fibre ${x.fib}`:""}</div></div></label>`).join("")}</div><label class="row small" style="margin-top:10px"><input type="checkbox" id="esave"> Save to my foods</label><button class="btn wide" id="addEst" style="margin-top:10px">Add to ${meal}</button><div class="small muted" style="margin-top:6px">Estimates. Switch to Manual if you have the label.</div>`;
       res.querySelector("#addEst").onclick=()=>addItems(est.filter((x,i)=>res.querySelector(`[data-i="${i}"]`).checked),res.querySelector("#esave").checked);
     }catch(e){res.innerHTML=`<div class="empty">${esc(sampleErr(e))}</div>`}
     finally{go.disabled=false}
   }
   function addItems(items,save){
     if(!items.length){toast("Nothing selected");return}
-    const add=items.map(x=>({id:uid(),meal,name:x.name,cal:r0(x.cal),p:r0(x.p),c:r0(x.c),f:r0(x.f),...(x.base?{base:x.base,amt:x.amt}:{})}));
+    const add=items.map(x=>({id:uid(),meal,name:x.name,cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f),...xn(x),...(x.base?{base:x.base,amt:x.amt}:{})}));
     setDayFoods(S.date,[...dayFoods(S.date),...add]);
-    if(save)add.forEach(x=>{if(x.base)return;const id=uid();S.foods.unshift({id,name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f});write("foods/"+id,r=>r.set({name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f,used:Date.now()}))});
+    if(save)add.forEach(x=>{if(x.base)return;const id=uid(),doc={name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f,...xn(x)};S.foods.unshift({id,...doc});write("foods/"+id,r=>r.set({...doc,used:Date.now()}))});
     closeSheet();toast(`Added to ${meal}`);
   }
   w.querySelectorAll("#seg button").forEach(b=>b.onclick=()=>{mode=b.dataset.m;paint()});
@@ -569,7 +589,7 @@ async function shrink(file,max){
    base = {name, cal,p,c,f per serving, g: grams in one serving (0 if unknown), sv: serving label} */
 function amtFactor(base,a){return a.u==="g"?(base.g?a.n/base.g:0):a.n}
 function amtLabel(base,a){return a.u==="g"?`${r0(a.n)}g`:(a.n===1?(base.sv&&base.sv!=="serve"?base.sv:"1 serve"):`${r1(a.n)} × ${base.sv||"serve"}`)}
-function amtItem(base,a){const m=amtFactor(base,a);return {name:`${base.name}, ${amtLabel(base,a)}`,cal:base.cal*m,p:base.p*m,c:base.c*m,f:base.f*m,base:{name:base.name,cal:base.cal,p:base.p,c:base.c,f:base.f,g:base.g||0,sv:base.sv||""},amt:{n:a.n,u:a.u}}}
+function amtItem(base,a){const m=amtFactor(base,a);return {name:`${base.name}, ${amtLabel(base,a)}`,cal:base.cal*m,p:base.p*m,c:base.c*m,f:base.f*m,...xn(base,m),base:{name:base.name,cal:base.cal,p:base.p,c:base.c,f:base.f,...xn(base),g:base.g||0,sv:base.sv||""},amt:{n:a.n,u:a.u}}}
 function amountUI(host,base,a,onChange){
   a=a||{n:base.g&&base.sv==="100g"?100:1,u:base.g&&base.sv==="100g"?"g":"sv"};
   const chips=()=>a.u==="g"?[50,100,150,200,250]:[0.5,1,1.5,2,3];
@@ -577,9 +597,9 @@ function amountUI(host,base,a,onChange){
     host.innerHTML=`<div class="amt"><button class="iconbtn" data-st="-1" aria-label="Less">−</button><input class="i num" id="amtN" inputmode="decimal" value="${a.u==="g"?r0(a.n):r1(a.n)}" aria-label="Amount"><button class="iconbtn" data-st="1" aria-label="More">+</button>
       <select class="i" id="amtU" aria-label="Unit">${base.g?`<option value="g" ${a.u==="g"?"selected":""}>grams</option>`:""}<option value="sv" ${a.u==="sv"?"selected":""}>${base.sv==="100g"?"× 100g":`serving${base.sv&&base.sv!=="serve"?` (${esc(base.sv)})`:"s"}`}</option></select></div>
       <div class="chips">${chips().map(c=>`<button class="chip ${+a.n===c?"on":""}" data-q="${c}">${a.u==="g"?c+"g":(c===0.5?"½":c===1.5?"1½":c)}</button>`).join("")}</div>
-      <div class="amtmac num"><b>${r0(base.cal*m)}</b> cal · P ${r1(base.p*m)}g · C ${r1(base.c*m)}g · F ${r1(base.f*m)}g</div>`;
+      <div class="amtmac num"><b>${r0(base.cal*m)}</b> cal · P ${r1(base.p*m)}g · C ${r1(base.c*m)}g · F ${r1(base.f*m)}g${base.fib!=null?` · Fibre ${r1(base.fib*m)}g`:""}</div>`;
     const n=host.querySelector("#amtN");
-    n.oninput=()=>{a.n=Math.max(0,Number(n.value)||0);const mm=amtFactor(base,a);host.querySelector(".amtmac").innerHTML=`<b>${r0(base.cal*mm)}</b> cal · P ${r1(base.p*mm)}g · C ${r1(base.c*mm)}g · F ${r1(base.f*mm)}g`;host.querySelectorAll("[data-q]").forEach(b=>b.classList.toggle("on",+b.dataset.q===a.n));onChange&&onChange(a)};
+    n.oninput=()=>{a.n=Math.max(0,Number(n.value)||0);const mm=amtFactor(base,a);host.querySelector(".amtmac").innerHTML=`<b>${r0(base.cal*mm)}</b> cal · P ${r1(base.p*mm)}g · C ${r1(base.c*mm)}g · F ${r1(base.f*mm)}g${base.fib!=null?` · Fibre ${r1(base.fib*mm)}g`:""}`;host.querySelectorAll("[data-q]").forEach(b=>b.classList.toggle("on",+b.dataset.q===a.n));onChange&&onChange(a)};
     n.onfocus=()=>n.select();
     host.querySelector("#amtU").onchange=e=>{const u=e.target.value;if(u===a.u)return;a.n=u==="g"?r0(a.n*(base.g||100)):r1(a.n/(base.g||1));a.u=u;paint();onChange&&onChange(a)};
     host.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{const st=a.u==="g"?10:0.5;a.n=Math.max(0,r1((Number(a.n)||0)+st*+b.dataset.st));paint();onChange&&onChange(a)});
@@ -587,7 +607,7 @@ function amountUI(host,base,a,onChange){
   };
   paint();return ()=>a;
 }
-function savedBase(f){const g=(String(f.serving||"").match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i)||[])[1];return {name:f.name,cal:+f.cal||0,p:+f.p||0,c:+f.c||0,f:+f.f||0,g:g?+g:0,sv:f.serving||"serve"}}
+function savedBase(f){const g=(String(f.serving||"").match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i)||[])[1];return {name:f.name,cal:+f.cal||0,p:+f.p||0,c:+f.c||0,f:+f.f||0,...xn(f),g:g?+g:0,sv:f.serving||"serve"}}
 let afcdP=null;function afcdLoad(){return afcdP||(afcdP=fetch("/afcd.json").then(r=>r.ok?r.json():[]).catch(()=>[]).then(a=>Array.isArray(a)?a:[]))}
 const okCode=s=>/^\d{8,14}$/.test(String(s||""));
 async function offLookup(code){
@@ -596,16 +616,16 @@ async function offLookup(code){
     if(!r.ok)return null;const j=await r.json();if(!j||j.status!==1||!j.product)return null;
     const p=j.product,n=p.nutriments||{},num=v=>v==null||v===""||isNaN(+v)?null:+v;
     const kcal=k=>{const a=num(n["energy-kcal_"+k]);if(a!=null)return a;const kj=num(n["energy-kj_"+k])??num(n["energy_"+k]);return kj!=null?kj/4.184:null};
-    const per=k=>({cal:kcal(k),p:num(n["proteins_"+k]),c:num(n["carbohydrates_"+k]),f:num(n["fat_"+k])});
+    const per=k=>({cal:kcal(k),p:num(n["proteins_"+k]),c:num(n["carbohydrates_"+k]),f:num(n["fat_"+k]),fib:num(n["fiber_"+k]),sug:num(n["sugars_"+k]),sat:num(n["saturated-fat_"+k]),na:num(n["sodium_"+k])!=null?num(n["sodium_"+k])*1000:null});
     let v=per("serving"),serving=String(p.serving_size||"").slice(0,30),note="";
     const sq=num(p.serving_quantity);
     if(v.cal==null){const h=per("100g");if(h.cal==null)return null;
-      if(sq&&sq>0){const m=sq/100;v={cal:h.cal*m,p:(h.p||0)*m,c:(h.c||0)*m,f:(h.f||0)*m};serving=serving||sq+"g"}
+      if(sq&&sq>0){const m=sq/100;v={cal:h.cal*m,p:(h.p||0)*m,c:(h.c||0)*m,f:(h.f||0)*m,...xn(h,m)};serving=serving||sq+"g"}
       else{v=h;serving="100g";note="Values are per 100g. Use grams eaten when you add it."}}
     const brand=String(p.brands||"").split(",")[0].trim(),pn=String(p.product_name_en||p.product_name||"").trim();
     const name=(brand&&pn&&!pn.toLowerCase().includes(brand.toLowerCase())?brand+" "+pn:pn||brand)+(p.quantity&&!/\d/.test(pn)?" "+p.quantity:"");
     if(!name)return null;
-    return {name:name.slice(0,80),serving,cal:r0(v.cal),p:r0(v.p),c:r0(v.c),f:r0(v.f),note};
+    return {name:name.slice(0,80),serving,cal:r0(v.cal),p:r1(v.p),c:r1(v.c),f:r1(v.f),...xn(v),note};
   }catch(e){return null}
 }
 async function liveScan(onCode){
@@ -667,6 +687,7 @@ function openSettings(){
   ${window.KC&&KC.email?`<div class="eyebrow" style="margin-top:4px">Account</div><div class="row between"><div class="small muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis">Signed in as ${esc(KC.email)}</div><button class="chip" id="sOut">Sign out</button></div>`:""}
   <div class="eyebrow" style="margin-top:4px">Targets</div>
   <div class="grid4">${[["cal","Calories"],["p","Protein g"],["c","Carbs g"],["f","Fat g"]].map(([k,l])=>`<label class="f" for="s-${k}">${l}<input class="i num" id="s-${k}" inputmode="numeric" value="${esc(s[k])}"></label>`).join("")}</div>
+  <label class="f" for="s-fib">Fibre target g a day<input class="i num" id="s-fib" inputmode="numeric" value="${esc(s.fib||"")}" placeholder="${s.sex==="f"?25:30}"></label>
   <div class="grid2"><label class="f" for="s-goalDate">Goal date<input class="i" type="date" id="s-goalDate" value="${esc(s.goalDate)}"></label><label class="f" for="s-startKg">Starting weight kg<input class="i num" id="s-startKg" inputmode="decimal" value="${esc(s.startKg)}"></label></div>
   <div class="eyebrow" style="margin-top:4px">For the expenditure estimate</div>
   <div class="grid2"><label class="f" for="s-sex">Sex<select class="i" id="s-sex">${opt("m",s.sex,"Male")}${opt("f",s.sex,"Female")}</select></label><label class="f" for="s-age">Age<input class="i num" id="s-age" inputmode="numeric" value="${esc(s.age)}"></label></div>
@@ -687,7 +708,7 @@ function openSettings(){
   {const bk=w.querySelector("#bkAll");if(bk)bk.onclick=backupAll;let armedR=false;const rg=w.querySelector("#rsGo");rg.onclick=()=>{const f=w.querySelector("#rsF").files[0];if(!f){toast("Pick a backup file first");return}if(!armedR){armedR=true;rg.textContent="Tap again: this overwrites matching entries";return}restoreAll(f,rg)}}
   w.querySelector("#sRedo").onclick=()=>{closeSheet();S.ob={step:"name",d:obDefaults()};S.forceOb=true;S.tab="home";$("#p-home").dataset.ob="";$("#p-coach").dataset.ob="";render();window.scrollTo(0,0)};
   w.querySelector("#sSave").onclick=()=>{
-    const n={...s};["cal","p","c","f"].forEach(k=>n[k]=r0(w.querySelector("#s-"+k).value)||DEF[k]);
+    const n={...s};["cal","p","c","f"].forEach(k=>n[k]=r0(w.querySelector("#s-"+k).value)||DEF[k]);n.fib=r0(w.querySelector("#s-fib").value)||"";
     n.goalDate=w.querySelector("#s-goalDate").value||DEF.goalDate;n.startKg=r1(w.querySelector("#s-startKg").value)||DEF.startKg;n.about=w.querySelector("#s-about").value.trim();
     n.sex=w.querySelector("#s-sex").value;n.age=r0(w.querySelector("#s-age").value)||DEF.age;n.heightCm=r0(w.querySelector("#s-heightCm").value)||"";
     n.activity=+w.querySelector("#s-activity").value;n.goalRate=+w.querySelector("#s-goalRate").value;
@@ -926,12 +947,12 @@ function waterCard(d){
   <div class="track"><span style="width:${pc}%;background:var(--mc)"></span></div>
   <div class="chips">${[0.25,0.5,1].map(q=>`<button class="chip" data-wadd="${q}">+${q*1000} ml</button>`).join("")}${v>0?`<button class="chip" data-wadd="-0.25" aria-label="Remove 250 ml">−250 ml</button>`:""}</div></div>`;
 }
-function logItems(meal,items,date){date=date||S.date;const add=items.map(x=>({id:uid(),meal,name:String(x.name).slice(0,80),cal:r0(x.cal),p:r0(x.p),c:r0(x.c),f:r0(x.f)}));setDayFoods(date,[...dayFoods(date),...add])}
+function logItems(meal,items,date){date=date||S.date;const add=items.map(x=>({id:uid(),meal,name:String(x.name).slice(0,80),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f)}));setDayFoods(date,[...dayFoods(date),...add])}
 function recipeItem(r,sv){return {name:`${r.name} (${r1(sv)} serve${sv===1?"":"s"})`,cal:r.per.cal*sv,p:r.per.p*sv,c:r.per.c*sv,f:r.per.f*sv}}
 function savedExtras(){
   let h="";
   if(S.meals.length)h+=`<div class="eyebrow">Saved meals</div><div class="card" style="padding:4px 16px"><div class="list">${S.meals.map(m=>{const t=totals(m.items||[]);return `<div class="li"><div class="grow"><div style="font-weight:600">${esc(m.name)}</div><div class="small muted num">${(m.items||[]).length} items · ${t.cal} cal · P ${t.p}</div></div><button class="add" data-meal="${m.id}">Add</button><button class="x" data-unmeal="${m.id}" aria-label="Delete ${esc(m.name)}">×</button></div>`}).join("")}</div></div>`;
-  if(S.recipes.length)h+=`<div class="eyebrow">Recipes</div><div class="card" style="padding:4px 16px"><div class="list">${S.recipes.map(r=>`<div class="li"><div class="grow"><div style="font-weight:600">${esc(r.name)}</div><div class="small muted num">Per serve ${r0(r.per.cal)} cal · P ${r0(r.per.p)}</div></div><input class="i num" style="width:62px;padding:8px" id="rs-${r.id}" value="1" inputmode="decimal" aria-label="Serves of ${esc(r.name)}"><button class="add" data-rec="${r.id}">Add</button></div>`).join("")}</div></div>`;
+  if(S.recipes.length)h+=`<div class="eyebrow">Recipes</div><div class="card" style="padding:4px 16px"><div class="list">${S.recipes.map(r=>`<div class="li"><div class="grow"><div style="font-weight:600">${esc(r.name)}</div><div class="small muted num">Per serve ${r0(r.per.cal)} cal · P ${r1(r.per.p)}</div></div><input class="i num" style="width:62px;padding:8px" id="rs-${r.id}" value="1" inputmode="decimal" aria-label="Serves of ${esc(r.name)}"><button class="add" data-rec="${r.id}">Add</button></div>`).join("")}</div></div>`;
   if(h)h+=`<div class="eyebrow">My foods</div>`;
   return h;
 }
@@ -947,7 +968,7 @@ function openSaveMeal(meal){
 }
 function openRecipes(){
   const w=sheet(`<div class="sheet-h"><h2>Recipes</h2>${closeBtn}</div><button class="btn wide" id="rNew">+ New recipe</button>
-  ${S.recipes.length?`<div class="card" style="padding:4px 16px"><div class="list">${S.recipes.map(r=>`<div class="li"><button class="open" data-redit="${r.id}"><div style="font-weight:700">${esc(r.name)}</div><div class="small muted num">${r.servings} serves · per serve ${r0(r.per.cal)} cal, P ${r0(r.per.p)} C ${r0(r.per.c)} F ${r0(r.per.f)}</div></button><span class="muted">›</span></div>`).join("")}</div></div>`:`<div class="empty">Add a recipe once, like a batch of chicken and rice, then log it by the serve.</div>`}
+  ${S.recipes.length?`<div class="card" style="padding:4px 16px"><div class="list">${S.recipes.map(r=>`<div class="li"><button class="open" data-redit="${r.id}"><div style="font-weight:700">${esc(r.name)}</div><div class="small muted num">${r.servings} serves · per serve ${r0(r.per.cal)} cal, P ${r1(r.per.p)} C ${r1(r.per.c)} F ${r1(r.per.f)}</div></button><span class="muted">›</span></div>`).join("")}</div></div>`:`<div class="empty">Add a recipe once, like a batch of chicken and rice, then log it by the serve.</div>`}
   <div class="small muted">To log a recipe, tap + Add on a meal, then Saved.</div>`);
   w.querySelector("#rNew").onclick=()=>openRecipe({id:uid(),name:"",servings:4,items:[]},true);
   w.querySelectorAll("[data-redit]").forEach(b=>b.onclick=()=>openRecipe(clone(S.recipes.find(x=>x.id===b.dataset.redit)),false));
@@ -958,8 +979,8 @@ function openRecipe(r,isNew){
   function paint(){
     const t=totals(r.items),sv=Math.max(1,+r.servings||1);
     rb.innerHTML=`<div class="grid2"><label class="f" for="rn">Name<input class="i" id="rn" value="${esc(r.name)}" placeholder="Satay chicken and rice"></label><label class="f" for="rsv">Serves<input class="i num" id="rsv" inputmode="decimal" value="${esc(r.servings)}"></label></div>
-    <div class="card" style="padding:4px 16px">${r.items.length?`<div class="list">${r.items.map((x,i)=>`<div class="li"><div class="grow"><div>${esc(x.name)}</div><div class="small muted num">${r0(x.cal)} cal · P ${r0(x.p)} · C ${r0(x.c)} · F ${r0(x.f)}</div></div><button class="x" data-rmi="${i}" aria-label="Remove ingredient">×</button></div>`).join("")}</div>`:`<div class="empty">No ingredients yet.</div>`}</div>
-    <div class="hint num"><b>Whole recipe:</b> ${t.cal.toLocaleString()} cal, P ${t.p} C ${t.c} F ${t.f}<br><b>Per serve:</b> ${r0(t.cal/sv)} cal, P ${r0(t.p/sv)} C ${r0(t.c/sv)} F ${r0(t.f/sv)}</div>
+    <div class="card" style="padding:4px 16px">${r.items.length?`<div class="list">${r.items.map((x,i)=>`<div class="li"><div class="grow"><div>${esc(x.name)}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)}</div></div><button class="x" data-rmi="${i}" aria-label="Remove ingredient">×</button></div>`).join("")}</div>`:`<div class="empty">No ingredients yet.</div>`}</div>
+    <div class="hint num"><b>Whole recipe:</b> ${t.cal.toLocaleString()} cal, P ${t.p} C ${t.c} F ${t.f}<br><b>Per serve:</b> ${r0(t.cal/sv)} cal, P ${r1(t.p/sv)} C ${r1(t.c/sv)} F ${r1(t.f/sv)}</div>
     ${sample?`<label class="f" for="ring">Add ingredients<textarea class="i" id="ring" placeholder="e.g. 1kg chicken thigh, 2 cups dry basmati rice, 400ml light coconut milk, 3 tbsp peanut butter"></textarea></label><button class="btn sec wide" id="rEst">Add with estimates</button>`:""}
     <details><summary class="small" style="cursor:pointer;font-weight:600">Add an ingredient manually</summary><div class="ex" style="margin-top:8px"><input class="i" id="rmn" placeholder="Ingredient and amount" aria-label="Ingredient"><div class="grid4">${[["cal","Cal"],["p","P"],["c","C"],["f","F"]].map(([k,l])=>`<label class="f" for="rm${k}">${l}<input class="i num" id="rm${k}" inputmode="decimal"></label>`).join("")}</div><button class="btn sec" id="rmAdd">Add ingredient</button></div></details>
     <button class="btn wide" id="rSave">Save recipe</button>${isNew?"":`<button class="btn danger wide" id="rDel">${armed?"Tap again to delete":"Delete recipe"}</button>`}`;
@@ -970,14 +991,14 @@ function openRecipe(r,isNew){
       const txt=rb.querySelector("#ring").value.trim();if(!txt){toast("List the ingredients first");return}
       est.disabled=true;est.textContent="Estimating…";
       try{const out=await sample.json(`Estimate nutrition for each recipe ingredient below, for the full amount given (raw or dry weight as written). Use Australian products. Reply with only a JSON array, integers only, like [{"name":"1kg chicken thigh fillets, raw","cal":1650,"p":190,"c":0,"f":95}].\nIngredients: ${txt}`,{modelTier:"quick"});
-        const items=(Array.isArray(out)?out:[]).filter(x=>x&&x.name).map(x=>({name:String(x.name).slice(0,80),cal:r0(x.cal),p:r0(x.p),c:r0(x.c),f:r0(x.f)}));
+        const items=(Array.isArray(out)?out:[]).filter(x=>x&&x.name).map(x=>({name:String(x.name).slice(0,80),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f)}));
         if(!items.length)throw{code:"invalid_json"};r.items.push(...items);paint();
       }catch(e){toast(sampleErr(e));est.disabled=false;est.textContent="Add with estimates"}
     };
-    rb.querySelector("#rmAdd").onclick=()=>{const n=rb.querySelector("#rmn").value.trim();if(!n){toast("Name the ingredient");return}r.items.push({name:n,cal:r0(rb.querySelector("#rmcal").value),p:r0(rb.querySelector("#rmp").value),c:r0(rb.querySelector("#rmc").value),f:r0(rb.querySelector("#rmf").value)});paint()};
+    rb.querySelector("#rmAdd").onclick=()=>{const n=rb.querySelector("#rmn").value.trim();if(!n){toast("Name the ingredient");return}r.items.push({name:n,cal:r0(rb.querySelector("#rmcal").value),p:r1(rb.querySelector("#rmp").value),c:r1(rb.querySelector("#rmc").value),f:r1(rb.querySelector("#rmf").value)});paint()};
     rb.querySelector("#rSave").onclick=()=>{
       if(!(r.name||"").trim()){toast("Name the recipe");return}if(!r.items.length){toast("Add at least one ingredient");return}
-      const sv=Math.max(1,+r.servings||1),t=totals(r.items),doc={name:r.name.trim(),servings:sv,items:r.items,per:{cal:r0(t.cal/sv),p:r0(t.p/sv),c:r0(t.c/sv),f:r0(t.f/sv)}};
+      const sv=Math.max(1,+r.servings||1),t=totals(r.items),doc={name:r.name.trim(),servings:sv,items:r.items,per:{cal:r0(t.cal/sv),p:r1(t.p/sv),c:r1(t.c/sv),f:r1(t.f/sv)}};
       const i=S.recipes.findIndex(x=>x.id===r.id);if(i>=0)S.recipes[i]={id:r.id,...doc};else S.recipes.push({id:r.id,...doc});
       write("recipes/"+r.id,x=>x.set(doc));closeSheet();toast("Recipe saved");
     };
@@ -1016,7 +1037,7 @@ Reply with only JSON: {"days":[{"date":"YYYY-MM-DD","meals":[{"meal":"Breakfast"
 Integers for all numbers. The shopping list covers everything in the plan, grouped by supermarket section.`;
     try{
       const o=await sample.json(prompt,{signal:ctl.signal,cache:false});
-      const days=(o&&Array.isArray(o.days)?o.days:[]).slice(0,3).map((d,i)=>({date:isDate(d&&d.date)?d.date:(dates[i]||dates[0]),meals:(d&&Array.isArray(d.meals)?d.meals:[]).filter(m=>m&&Array.isArray(m.items)).map(m=>({meal:MEALS.includes(m.meal)?m.meal:"Snacks",name:String(m.name||m.meal).slice(0,60),items:m.items.filter(x=>x&&x.name).map(x=>({name:String(x.name).slice(0,80),cal:r0(x.cal),p:r0(x.p),c:r0(x.c),f:r0(x.f)}))})).filter(m=>m.items.length)})).filter(d=>d.meals.length);
+      const days=(o&&Array.isArray(o.days)?o.days:[]).slice(0,3).map((d,i)=>({date:isDate(d&&d.date)?d.date:(dates[i]||dates[0]),meals:(d&&Array.isArray(d.meals)?d.meals:[]).filter(m=>m&&Array.isArray(m.items)).map(m=>({meal:MEALS.includes(m.meal)?m.meal:"Snacks",name:String(m.name||m.meal).slice(0,60),items:m.items.filter(x=>x&&x.name).map(x=>({name:String(x.name).slice(0,80),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f)}))})).filter(m=>m.items.length)})).filter(d=>d.meals.length);
       if(!days.length)throw{code:"invalid_json"};
       S.mealplan={label:pf==="rest"?"rest of today":pf==="tomorrow"?"tomorrow":"next 3 days",days,shopping:(Array.isArray(o.shopping)?o.shopping:[]).filter(x=>x&&x.item).slice(0,60).map(x=>({item:String(x.item).slice(0,60),qty:String(x.qty||"").slice(0,30),section:String(x.section||"Other").slice(0,30),got:false})),tips:String(o.tips||"").slice(0,300),created:Date.now(),logged:{}};
       write("mealplan/current",r=>r.set(S.mealplan));show();
@@ -1039,7 +1060,7 @@ Integers for all numbers. The shopping list covers everything in the plan, group
 function openEatOut(){
   const st=S.settings,tt=totals(dayFoods(today()));
   const w=sheet(`<div class="sheet-h"><h2>Eating out</h2>${closeBtn}</div><div id="eb" class="ex"></div>`),eb=w.querySelector("#eb");let pk=[];
-  eb.innerHTML=`<div class="hint num">Left today: ${Math.max(0,st.cal-tt.cal).toLocaleString()} cal and ${Math.max(0,st.p-tt.p)}g protein</div>
+  eb.innerHTML=`<div class="hint num">Left today: ${Math.max(0,st.cal-tt.cal).toLocaleString()} cal and ${Math.max(0,r1(st.p-tt.p))}g protein</div>
   <label class="f" for="eoP">Photo of the menu<input class="i" type="file" id="eoP" accept="image/*" capture="environment"></label>
   <label class="f" for="eoT">Or where you're eating<input class="i" id="eoT" placeholder="e.g. Grill'd, Guzman y Gomez, local Thai, the pub"></label>
   <label class="f" for="eoM">Which meal<select class="i" id="eoM">${MEALS.map(m=>`<option>${m}</option>`).join("")}</select></label>
@@ -1051,13 +1072,13 @@ function openEatOut(){
     const res=eb.querySelector("#eoRes"),btn=eb.querySelector("#eoGo");btn.disabled=true;res.innerHTML=`<div class="empty">${f?"Reading the menu…":"Thinking…"}</div>`;
     const goal=(GOALS.find(g=>g[0]===st.goalKey)||GOALS[0])[1];
     const prompt=`Help pick a meal when eating out. ${f?"A photo of the menu is attached.":""} Place: ${place||"see the menu photo"}. Meal: ${meal}.
-Remaining today: ${Math.max(0,st.cal-tt.cal)} cal and ${Math.max(0,st.p-tt.p)}g protein. Daily targets ${st.cal} cal and ${st.p}g protein. Goal: ${goal}.
+Remaining today: ${Math.max(0,st.cal-tt.cal)} cal and ${Math.max(0,r1(st.p-tt.p))}g protein. Daily targets ${st.cal} cal and ${st.p}g protein. Goal: ${goal}.
 Food notes: ${st.foodNotes||"none"}.
 Give the 3 best options from this menu (or typical for this place), ranked, high in protein and fitting the calories. Include simple tweaks such as sauce on the side or swapping chips for salad. Estimate realistic restaurant portions; restaurant food usually has more oil than home cooking.
 Plain text, never use em dashes. Reply with only JSON: {"picks":[{"name":"menu item as ordered","why":"one sentence","tweak":"short tweak or empty","cal":0,"p":0,"c":0,"f":0}],"avoid":"one sentence on what to skip"}`;
     try{
       const o=await sample.json(prompt,f?{images:f}:{modelTier:"quick"});
-      pk=(o&&Array.isArray(o.picks)?o.picks:[]).filter(x=>x&&x.name).slice(0,4).map(x=>({name:String(x.name).slice(0,80),why:String(x.why||"").slice(0,200),tweak:String(x.tweak||"").slice(0,120),cal:r0(x.cal),p:r0(x.p),c:r0(x.c),f:r0(x.f)}));
+      pk=(o&&Array.isArray(o.picks)?o.picks:[]).filter(x=>x&&x.name).slice(0,4).map(x=>({name:String(x.name).slice(0,80),why:String(x.why||"").slice(0,200),tweak:String(x.tweak||"").slice(0,120),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f)}));
       if(!pk.length)throw{code:"invalid_json"};
       res.innerHTML=pk.map((x,i)=>`<div class="card ex"><div class="row between"><div style="font-weight:700;min-width:0">${i+1}. ${esc(x.name)}</div><span class="small num" style="white-space:nowrap">${x.cal} cal · P ${x.p}</span></div>${x.why?`<div class="small">${esc(x.why)}</div>`:""}${x.tweak?`<div class="hint">${esc(x.tweak)}</div>`:""}<button class="btn sec" data-eo="${i}">Log to ${meal}</button></div>`).join("")+(o.avoid?`<div class="small muted">${esc(String(o.avoid).slice(0,200))}</div>`:"")+`<div class="small muted">These are estimates. Restaurant meals vary.</div>`;
       res.querySelectorAll("[data-eo]").forEach(b=>b.onclick=()=>{const x=pk[+b.dataset.eo];logItems(meal,[x],today());closeSheet();toast("Logged "+x.name)});
@@ -1223,15 +1244,15 @@ function habitOk(d,k){const t=+((S.settings.habits||{})[k]||{}).target||0;return
 function setHabit(d,k,v){S.days[d]={...(S.days[d]||{}),foods:dayFoods(d),habits:{...((S.days[d]&&S.days[d].habits)||{}),[k]:v}};render();write("days/"+d,r=>r.set(S.days[d]))}
 function openHabit(d,k){
   const [,l,u]=HAB.find(x=>x[0]===k),t=+S.settings.habits[k].target,cur=habitVal(d,k);
-  const w=sheet(`<div class="sheet-h"><h2>${l}</h2>${closeBtn}</div><div class="small muted">Target ${t.toLocaleString()}${u?" "+u:""} · ${esc(fmtDate(d))}</div>${k==="water"?`<div class="chips">${[0.25,0.5,1].map(q=>`<button class="chip" data-q="${q}">+${q*1000} ml</button>`).join("")}</div>`:""}<label class="f" for="hv">${k==="water"?"Total litres":k==="steps"?"Steps":"Hours slept last night"}<input class="i num" id="hv" inputmode="decimal" value="${cur||""}"></label><button class="btn wide" id="hSave">Save</button>`);
+  const w=sheet(`<div class="sheet-h"><h2>${l}</h2>${closeBtn}</div><div class="small muted">Target ${k==="sleep"?fmtSleep(t):t.toLocaleString()+(u?" "+u:"")} · ${esc(fmtDate(d))}</div>${k==="water"?`<div class="chips">${[0.25,0.5,1].map(q=>`<button class="chip" data-q="${q}">+${q*1000} ml</button>`).join("")}</div>`:""}${k==="sleep"?`<div class="eyebrow">Slept last night</div><div class="row" style="gap:8px"><input class="i num" id="hv" inputmode="numeric" value="${cur?Math.floor(cur):""}" aria-label="Hours" style="width:72px"><span class="small muted">h</span><input class="i num" id="hvm" inputmode="numeric" value="${cur?Math.round((cur-Math.floor(cur))*60):""}" aria-label="Minutes" style="width:72px"><span class="small muted">min</span></div>`:`<label class="f" for="hv">${k==="water"?"Total litres":"Steps"}<input class="i num" id="hv" inputmode="decimal" value="${cur||""}"></label>`}<button class="btn wide" id="hSave">Save</button>`);
   const inp=w.querySelector("#hv");{const g=w.querySelector("#hGarmin");if(g)g.onclick=openGarminImport}
   w.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{inp.value=Math.round(((+inp.value||0)+(+b.dataset.q))*100)/100});
-  w.querySelector("#hSave").onclick=()=>{const v=k==="steps"?r0(inp.value):Math.round((+inp.value||0)*100)/100;setHabit(d,k,v);closeSheet();toast(l+" saved")};
+  w.querySelector("#hSave").onclick=()=>{const v=k==="steps"?r0(inp.value):k==="sleep"?Math.round(((+inp.value||0)+(+w.querySelector("#hvm").value||0)/60)*100)/100:Math.round((+inp.value||0)*100)/100;setHabit(d,k,v);closeSheet();toast(l+" saved")};
 }
 function csvOf(rows){return rows.map(r=>r.map(v=>{const s=String(v??"");return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}).join(",")).join("\n")}
 async function exportCsv(kind){
   let rows=[];
-  if(kind==="food"){rows=[["date","meal","food","calories","protein_g","carbs_g","fat_g"]];Object.keys(S.days).sort().forEach(d=>dayFoods(d).forEach(f=>rows.push([d,f.meal,f.name,r0(f.cal),r0(f.p),r0(f.c),r0(f.f)])))}
+  if(kind==="food"){rows=[["date","meal","food","calories","protein_g","carbs_g","fat_g","fibre_g","sugars_g","sat_fat_g","sodium_mg"]];Object.keys(S.days).sort().forEach(d=>dayFoods(d).forEach(f=>rows.push([d,f.meal,f.name,r0(f.cal),r1(f.p),r1(f.c),r1(f.f),f.fib??"",f.sug??"",f.sat??"",f.na??""])))}
   if(kind==="weight"){rows=[["date","weight_kg","trend_kg"]];weightSeries().filter(p=>p.kg!=null).forEach(p=>rows.push([p.d,r1(p.kg),r1(p.avg)]))}
   if(kind==="training"){rows=[["date","session","exercise","set","kg","reps","cardio_type","km","minutes","avg_hr"]];[...S.workouts].sort((a,b)=>a.date.localeCompare(b.date)).forEach(w=>{if(isCardio(w)){const c=w.cardio||{};rows.push([w.date,w.title,"","","","",c.type,c.km,c.min,c.hr])}else(w.exercises||[]).forEach(e=>(e.sets||[]).forEach((s,i)=>rows.push([w.date,w.title,e.name,i+1,s.kg,s.reps,"","","",""])))})}
   if(kind==="measures"){rows=[["date",...MEAS.map(m=>m[0]+"_cm")]];Object.keys(S.measures).sort().forEach(d=>rows.push([d,...MEAS.map(([k])=>S.measures[d][k]||"")]))}
@@ -1245,7 +1266,7 @@ function renderHome(){
   if(online&&!S.loadedSettings){p.dataset.ob="";p.innerHTML=`<div class="empty">Loading…</div>`;return}
   if(!S.settings.onboarded||S.forceOb){if(!S.ob)S.ob={step:"name",d:obDefaults()};if(p.dataset.ob===S.ob.step)return;renderOnboarding(p);return}
   p.dataset.ob="";
-  const t=today(),st=S.settings,c=checks(t),tt=totals(dayFoods(t)),left=st.cal-tt.cal,pl2=Math.max(0,st.p-tt.p),hr=new Date().getHours();
+  const t=today(),st=S.settings,c=checks(t),tt=totals(dayFoods(t)),left=st.cal-tt.cal,pl2=Math.max(0,r1(st.p-tt.p)),hr=new Date().getHours();
   const hi=hr<12?"Morning":hr<17?"Afternoon":"Evening",nm=st.name?", "+esc(String(st.name).split(" ")[0]):"",sk=streak();
   const items=[c.weigh,c.food,c.train,...habitsOn().map(([k])=>habitOk(t,k))],n=items.filter(Boolean).length,tot=items.length;
   const tick=ok=>`<span class="tk ${ok?"on":""}" aria-hidden="true">${ok?"✓":""}</span>`;
@@ -1264,7 +1285,7 @@ function renderHome(){
   if(habitsOn().some(([k])=>k==="water"))h+=waterCard(t);
   habitsOn().filter(([k])=>k!=="water").forEach(([k,l,u])=>{const tg=+st.habits[k].target,v=habitVal(t,k),ok=habitOk(t,k);
     if(k==="steps")h+=`<div class="card task">${tick(ok)}<div class="grow row between"><div><div class="tt">Steps</div><div class="small muted num">Goal ${tg.toLocaleString()} a day</div></div><button class="${ok?"chip":"add"}" data-steptick="1">${ok?"Undo":"Hit it"}</button></div></div>`;
-    else h+=`<div class="card task">${tick(ok)}<div class="grow"><div class="row between"><div class="tt">Sleep</div><span class="small muted num">Goal ${tg} h</span></div>${v?`<div class="row between" style="margin-top:4px"><div class="small muted num">${fmtSleep(v)} last night</div><button class="chip" data-sleepedit="1">Edit</button></div>`:`<div class="row" style="margin-top:10px"><input class="i num" id="hSleep" inputmode="decimal" placeholder="Hours, e.g. 7.5" aria-label="Hours slept last night"><button class="btn" id="hSleepGo">Save</button></div>`}</div></div>`;
+    else h+=`<div class="card task">${tick(ok)}<div class="grow"><div class="row between"><div class="tt">Sleep</div><span class="small muted num">Goal ${fmtSleep(tg)}</span></div>${v?`<div class="row between" style="margin-top:4px"><div class="small muted num">${fmtSleep(v)} last night</div><button class="chip" data-sleepedit="1">Edit</button></div>`:`<div class="row" style="margin-top:10px;gap:8px"><input class="i num" id="hSleep" inputmode="numeric" placeholder="7" aria-label="Hours slept" style="width:64px"><span class="small muted">h</span><input class="i num" id="hSleepM" inputmode="numeric" placeholder="30" aria-label="Minutes slept" style="width:64px"><span class="small muted">min</span><button class="btn" id="hSleepGo" style="margin-left:auto">Save</button></div>`}</div></div>`;
   });
   if(needCI)h+=`<div class="card task"><span class="tk"></span><div class="grow"><div class="tt">Weekly check-in</div><div class="small muted">You're burning about ${x.est.toLocaleString()} cal a day. To stay on pace, the suggested target is ${x.target.toLocaleString()} cal.</div><button class="btn wide" id="applyT" style="margin-top:10px">Update to ${x.target.toLocaleString()} cal</button></div></div>`;
   h+=stepCard();
@@ -1280,7 +1301,7 @@ function renderHome(){
   p.querySelectorAll("[data-wadd]").forEach(b=>b.onclick=()=>setHabit(t,"water",Math.max(0,Math.round((habitVal(t,"water")+(+b.dataset.wadd))*100)/100)));
   p.querySelectorAll("[data-hhab]").forEach(b=>b.onclick=()=>openHabit(t,b.dataset.hhab));
   const stt=p.querySelector("[data-steptick]");if(stt)stt.onclick=()=>{const tg=+S.settings.habits.steps.target;setHabit(t,"steps",habitOk(t,"steps")?0:tg)};
-  const sg=$("#hSleepGo");if(sg)sg.onclick=()=>{const v=Math.round((+$("#hSleep").value||0)*100)/100;if(!(v>0&&v<16)){toast("Enter hours slept, e.g. 7.5");return}setHabit(t,"sleep",v);toast("Sleep saved")};
+  const sg=$("#hSleepGo");if(sg)sg.onclick=()=>{const hh=+$("#hSleep").value||0,mm=+$("#hSleepM").value||0;if(mm<0||mm>59){toast("Minutes should be 0 to 59");return}const v=Math.round((hh+mm/60)*100)/100;if(!(v>0&&v<16)){toast("Enter hours and minutes, e.g. 7 h 30 min");return}setHabit(t,"sleep",v);toast("Sleep saved")};
   const se=p.querySelector("[data-sleepedit]");if(se)se.onclick=()=>openHabit(t,"sleep");
   bindStepCard(p);
   bindExp(p);
@@ -1338,7 +1359,7 @@ function openGarminImport(){
     finally{btn.disabled=false}
   };
 }
-const fmtSleep=h=>{const m=Math.round(h*60);return `${Math.floor(m/60)}h ${String(m%60).padStart(2,"0")}m`};
+const fmtSleep=h=>{const m=Math.round(h*60);return `${Math.floor(m/60)}h${m%60?` ${m%60}m`:""}`};
 
 /* ---------- POLISH: edit food, copy, projection, backup ---------- */
 function openEditFood(d,id){
@@ -1347,12 +1368,12 @@ function openEditFood(d,id){
   function paint(){
     b.innerHTML=`<label class="f" for="efn">Food<input class="i" id="efn" value="${esc(f.name)}"></label>
     <div class="eyebrow">Amount</div><div id="efAmt" class="ex"></div>
-    <details${f.base?"":" open"}><summary class="small muted" style="cursor:pointer;padding:6px 0">Edit the numbers directly</summary><div class="grid4">${[["cal","Cal"],["p","Protein"],["c","Carbs"],["f","Fat"]].map(([k,l])=>`<label class="f" for="ef-${k}">${l}<input class="i num" id="ef-${k}" inputmode="decimal" value="${r0(f[k])}"></label>`).join("")}</div></details>
+    <details${f.base?"":" open"}><summary class="small muted" style="cursor:pointer;padding:6px 0">Edit the numbers directly</summary><div class="grid4">${[["cal","Cal"],["p","Protein"],["c","Carbs"],["f","Fat"]].map(([k,l])=>`<label class="f" for="ef-${k}">${l}<input class="i num" id="ef-${k}" inputmode="decimal" value="${k==="cal"?r0(f[k]):r1(f[k])}"></label>`).join("")}</div></details>
     <label class="f" for="efm">Meal<select class="i" id="efm">${MEALS.map(m=>`<option ${m===f.meal?"selected":""}>${m}</option>`).join("")}</select></label>
     <button class="btn wide" id="efSave">Save</button><button class="btn danger wide" id="efDel">Remove</button>`;
-    const rd=()=>{f.name=b.querySelector("#efn").value.trim()||f.name;["cal","p","c","f"].forEach(k=>f[k]=r0(b.querySelector("#ef-"+k).value));f.meal=b.querySelector("#efm").value};
+    const rd=()=>{f.name=b.querySelector("#efn").value.trim()||f.name;["cal","p","c","f"].forEach(k=>f[k]=k==="cal"?r0(b.querySelector("#ef-"+k).value):r1(b.querySelector("#ef-"+k).value));f.meal=b.querySelector("#efm").value};
     {const base=f.base||{name:f.name,cal:f.cal,p:f.p,c:f.c,f:f.f,g:0,sv:"this entry"};
-     amountUI(b.querySelector("#efAmt"),base,f.amt?{...f.amt}:{n:1,u:"sv"},a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=r0(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});if(f.base){f.name=it.name;f.amt={...a};b.querySelector("#efn").value=f.name}else if(a.n!==1){f._mul=a.n}})}
+     amountUI(b.querySelector("#efAmt"),base,f.amt?{...f.amt}:{n:1,u:"sv"},a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=k==="cal"?r0(it[k]):r1(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});Object.assign(f,xn(it));if(f.base){f.name=it.name;f.amt={...a};b.querySelector("#efn").value=f.name}else if(a.n!==1){f._mul=a.n}})}
     b.querySelector("#efSave").onclick=()=>{rd();setDayFoods(d,dayFoods(d).map(x=>x.id===id?{...f}:x));closeSheet();toast("Updated")};
     b.querySelector("#efDel").onclick=()=>{setDayFoods(d,dayFoods(d).filter(x=>x.id!==id));closeSheet();toast("Removed")};
   }
@@ -1640,7 +1661,7 @@ function checklist(d){
 function bindChecklist(root,after){root.querySelectorAll("[data-ck]").forEach(b=>b.onclick=()=>{const d=b.dataset.d,k=b.dataset.ck;if(k==="weigh")openWeigh(d);if(k==="food"){setComplete(d,!checks(d).food);after&&after()}if(k==="train")startPlanned(d);if(k==="habit")openHabit(d,b.dataset.k)});root.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{const d=b.dataset.st,tg=+S.settings.habits.steps.target;setHabit(d,"steps",habitOk(d,"steps")?0:tg);after&&after()});root.querySelectorAll("[data-hq]").forEach(b=>b.onclick=()=>{const d=b.dataset.d;setHabit(d,"water",Math.round((habitVal(d,"water")+0.25)*100)/100);after&&after()})}
 function coachToday(){
   const t=today(),st=S.settings,tt=totals(dayFoods(t)),hr=new Date().getHours(),hi=hr<12?"Morning":hr<17?"Afternoon":"Evening",nm=st.name?", "+esc(String(st.name).split(" ")[0]):"";
-  const left=st.cal-tt.cal,pl2=Math.max(0,st.p-tt.p),c=checks(t),n=[c.weigh,c.food,c.train,...habitsOn().map(([k])=>habitOk(t,k))].filter(Boolean).length,tot=3+habitsOn().length,sk=streak();
+  const left=st.cal-tt.cal,pl2=Math.max(0,r1(st.p-tt.p)),c=checks(t),n=[c.weigh,c.food,c.train,...habitsOn().map(([k])=>habitOk(t,k))].filter(Boolean).length,tot=3+habitsOn().length,sk=streak();
   return `<div class="card ex"><div class="row between"><div class="eyebrow">${hi}${nm}</div><span class="pill ${sk?"good":""}">${sk} day streak</span></div>
   <div class="today-rings">${rings3([{p:tt.cal/st.cal,col:left<0?"var(--bad)":"var(--accent)"},{p:tt.p/st.p,col:"var(--mp)"},{p:n/tot,col:"var(--good)"}],132)}<div class="rl">
   <div class="ri"><span class="dot" style="background:${left<0?"var(--bad)":"var(--accent)"}"></span><span class="rv num">${Math.abs(left).toLocaleString()}</span><span class="rk">Cal ${left<0?"over":"left"}</span></div>
@@ -1783,7 +1804,7 @@ function coachTools(log){
      execute:i=>{const k=String(i.habit),R={steps:[2000,30000],water:[1,6],sleep:[5,10]}[k];if(!R)throw new Error("Habit must be steps, water or sleep");let v=+i.target;if(!(v>=R[0]&&v<=R[1]))throw new Error(`Target must be between ${R[0]} and ${R[1]}`);v=k==="steps"?Math.round(v/100)*100:Math.round(v*4)/4;noteSettings();const st=S.settings,n={...st,habits:{...(st.habits||{}),[k]:{...((st.habits||{})[k]||{}),on:true,target:v}}};if(k==="steps")n.lastStepCheck=today();S.settings=n;write("settings/main",r=>r.set(n));return done(`Set the ${k} target to ${k==="steps"?v.toLocaleString():v}${k==="water"?" L":k==="sleep"?" hours":" steps"}`)}},
     {name:"update_targets",description:"Changes the daily nutrition targets. Use only when the user asks or clearly agrees. Calories 1200 to 6000; protein, carbs and fat in grams.",
      inputSchema:{type:"object",properties:{cal:{type:"integer"},p:{type:"integer"},c:{type:"integer"},f:{type:"integer"}},required:["cal","p","c","f"]},
-     execute:i=>{const cal=r0(i.cal);if(cal<1200||cal>6000)throw new Error("Calories must be between 1200 and 6000");noteSettings();const n={...S.settings,cal,p:r0(i.p),c:r0(i.c),f:r0(i.f)};S.settings=n;write("settings/main",r=>r.set(n));return done(`Set targets to ${cal} cal, P ${n.p}g, C ${n.c}g, F ${n.f}g`)}}
+     execute:i=>{const cal=r0(i.cal);if(cal<1200||cal>6000)throw new Error("Calories must be between 1200 and 6000");noteSettings();const n={...S.settings,cal,p:r1(i.p),c:r1(i.c),f:r1(i.f)};S.settings=n;write("settings/main",r=>r.set(n));return done(`Set targets to ${cal} cal, P ${n.p}g, C ${n.c}g, F ${n.f}g`)}}
   ];
 }
 
@@ -1832,7 +1853,7 @@ function context(){
   lines.push(`Daily targets: ${st.cal} cal, protein ${st.p}g, carbs ${st.c}g, fat ${st.f}g.`);
   if(st.about)lines.push(`About them: ${st.about}`);
   const tf=dayFoods(t),tt=totals(tf);
-  lines.push(`Today so far: ${tt.cal} cal, P ${tt.p} C ${tt.c} F ${tt.f}. Items: ${tf.map(f=>`${f.meal}: ${f.name} (${r0(f.cal)} cal, ${r0(f.p)}p)`).join("; ")||"nothing logged yet"}. Local time ${new Date().toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"})}.`);
+  lines.push(`Today so far: ${tt.cal} cal, P ${tt.p} C ${tt.c} F ${tt.f}, fibre ${tt.fib}g (target ${fibTarget()}g). Items: ${tf.map(f=>`${f.meal}: ${f.name} (${r0(f.cal)} cal, ${r0(f.p)}p)`).join("; ")||"nothing logged yet"}. Local time ${new Date().toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"})}.`);
   const past=[];for(let i=1;i<=7;i++){const d=addDays(t,-i),f=dayFoods(d);if(f.length){const x=totals(f);past.push(`${d}: ${x.cal} cal, ${x.p}p`)}}
   lines.push(`Previous 7 days of food: ${past.join("; ")||"none logged"}.`);
   const ser=weightSeries().filter(p=>p.kg!=null).slice(-14);

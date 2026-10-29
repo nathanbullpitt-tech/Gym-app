@@ -7,6 +7,7 @@ import XLSX from "xlsx"
 const URL = process.env.AFCD_URL || "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
 const OUT = "web/afcd.json"
 const r1 = n => Math.round(n * 10) / 10
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 
 async function main() {
   const res = await fetch(URL, { signal: AbortSignal.timeout(60000) })
@@ -23,12 +24,15 @@ async function main() {
     const iP = col(/^protein/i)
     const iF = col(/^fat,? total/i, /^total fat/i)
     const iC = col(/available carbohydrate, with sugar alcohols/i, /available carbohydrate/i, /^carbohydrate/i)
+    const iFib = col(/^total dietary fibre/i, /dietary fibre/i), iSug = col(/^total sugars/i, /^sugars/i), iSat = col(/saturated fatty acids.*\(g\)/i, /saturated fat.*\(g\)/i), iNa = col(/^sodium.*\(mg\)/i, /^sodium/i)
+    const opt = i => r => i < 0 || r[i] == null || r[i] === "" ? null : num(r[i])
+    const gFib = opt(iFib), gSug = opt(iSug), gSat = opt(iSat), gNa = opt(iNa)
     if ([iName, iKj, iP, iF, iC].some(i => i < 0)) { console.log("AFCD: columns not found in", sn, { iName, iKj, iP, iF, iC }); continue }
-    const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
     const list = []
     for (const r of rows.slice(hi + 1)) {
       if (!r || !r[iName]) continue
-      list.push([String(r[iName]).trim(), Math.round(num(r[iKj]) / 4.184), r1(num(r[iP])), r1(num(r[iC])), r1(num(r[iF]))])
+      const x = (g, f) => { const v = g(r); return v == null ? null : f(v) }
+      list.push([String(r[iName]).trim(), Math.round(num(r[iKj]) / 4.184), r1(num(r[iP])), r1(num(r[iC])), r1(num(r[iF])), x(gFib, r1), x(gSug, r1), x(gSat, r1), x(gNa, Math.round)])
     }
     if (list.length < 100) { console.log("AFCD: too few rows in", sn, list.length); continue }
     writeFileSync(OUT, JSON.stringify(list))
