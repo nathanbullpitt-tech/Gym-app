@@ -1,3 +1,4 @@
 node_modules/
 .netlify/
 web/runtime.js
+web/afcd.json

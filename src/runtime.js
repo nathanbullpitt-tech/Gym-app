@@ -137,10 +137,13 @@ function startSync() {
   const tick = async () => {
     clearTimeout(pollT)
     if (document.visibilityState === "visible") { try { await pull() } catch (e) {} }
-    pollT = setTimeout(tick, 45000)
   }
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { flush(); tick() } })
-  pollT = setTimeout(tick, 45000)
+  // Sync when the app comes back to the foreground (no background polling, to save credits).
+  let last = Date.now()
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") { flush(); if (Date.now() - last > 60000) { last = Date.now(); tick() } }
+    else flush()
+  })
 }
 
 function makeQuery(col, order, lim) {
@@ -265,7 +268,8 @@ async function sample(input, opts = {}) {
   messages = normalise(messages)
   const tools = Array.isArray(opts.tools) ? opts.tools : []
   const toolDefs = tools.map(t => ({ name: t.name, description: t.description || "", input_schema: t.inputSchema || t.input_schema || { type: "object", properties: {} } }))
-  const tier = opts.modelTier === "quick" ? "quick" : "main"
+  // Haiku for everything except calls that explicitly ask for the stronger model (plan building).
+  const tier = opts.modelTier === "main" ? "main" : "quick"
   const parts = []
   let current = ""
   const emit = () => opts.onText && opts.onText({ text: [...parts, current].filter(Boolean).join("\n\n") })
@@ -273,7 +277,7 @@ async function sample(input, opts = {}) {
     current = ""
     let r
     try {
-      r = await callAI({ messages, tools: toolDefs, tier, max_tokens: opts.maxTokens || 4096, system: opts.system }, opts.signal, d => { current += d; emit() })
+      r = await callAI({ messages, tools: toolDefs, tier, max_tokens: opts.maxTokens || (tier === "main" ? 8000 : 3000), system: opts.system }, opts.signal, d => { current += d; emit() })
     } catch (e) {
       const partial = [...parts, current].filter(Boolean).join("\n\n")
       if (partial) e.text = partial
@@ -308,9 +312,18 @@ function parseJSON(text) {
   if (s !== Infinity && e > s) { try { return JSON.parse(t.slice(s, e + 1)) } catch (x) {} }
   throw Object.assign(new Error("invalid_json"), { code: "invalid_json" })
 }
+const AIC = "kc-aicache"
 sample.json = async (prompt, opts = {}) => {
+  const key = !opts.images && opts.cache !== false ? (opts.modelTier || "") + "|" + String(prompt) : null
+  if (key) { const c = lsGet(AIC) || {}; if (c[key]) return clone(c[key].v) }
   const { text } = await sample(String(prompt) + "\n\nReply with the JSON only. No code fences, no other text.", { ...opts, tools: undefined, onText: undefined })
-  return parseJSON(text)
+  const v = parseJSON(text)
+  if (key) {
+    const c = lsGet(AIC) || {}; c[key] = { v, t: Date.now() }
+    const ks = Object.keys(c); if (ks.length > 150) ks.sort((a, b) => c[a].t - c[b].t).slice(0, ks.length - 150).forEach(k => delete c[k])
+    lsSet(AIC, c)
+  }
+  return v
 }
 sample.limits = async () => ({ tools: true, images: true })
 

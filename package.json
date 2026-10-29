@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/runtime.js --bundle --format=iife --minify --target=es2020 --outfile=web/runtime.js"
+    "build": "node scripts/afcd.mjs && esbuild src/runtime.js --bundle --format=iife --minify --target=es2020 --outfile=web/runtime.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
@@ -16,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "xlsx": "^0.18.5"
   }
 }

@@ -55,9 +55,10 @@ export default async (req: Request) => {
   const anthropic = new Anthropic()
   const tier = body.tier === "quick" ? "quick" : "main"
   const params = {
-    max_tokens: Math.min(Math.max(Number(body.max_tokens) || 4096, 256), 16000),
+    max_tokens: Math.min(Math.max(Number(body.max_tokens) || 3000, 256), 8000),
     messages: body.messages,
-    ...(body.system ? { system: body.system } : {}),
+    // Cache the fixed coach instructions and tool list between messages (cheaper repeat reads).
+    ...(body.system ? { system: [{ type: "text" as const, text: String(body.system), cache_control: { type: "ephemeral" as const } }] } : {}),
     ...(Array.isArray(body.tools) && body.tools.length ? { tools: body.tools.slice(0, 20) } : {}),
   }
 

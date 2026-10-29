@@ -461,12 +461,25 @@ const closeBtn=`<button class="iconbtn" data-close aria-label="Close"><svg viewB
 function sampleErr(e){const c=e&&e.code;return c==="not_granted"||c==="sampling_disabled"?"The coach needs permission to use Claude. Allow it when asked.":c==="rate_limited"?"Too many requests. Try again in a minute.":c==="image_rejected"?"That photo couldn't be read. Try a different one.":c==="invalid_json"?"Couldn't read the estimate. Try rewording it.":c==="refused"?"Claude couldn't help with that one. Try rewording.":"Something went wrong. Try again."}
 
 function openAddFood(meal){
-  let mode=sample?"describe":"manual",est=[];
+  let mode="search",est=[];
   const w=sheet(`<div class="sheet-h"><h2>Add to ${meal}</h2>${closeBtn}</div>
-  <div class="seg" id="seg" style="grid-auto-columns:minmax(58px,1fr);overflow-x:auto">${[["scan","Scan"],sample&&["describe","Describe"],sample&&["photo","Photo"],["saved","Saved"],["quick","Quick"],["manual","Manual"]].filter(Boolean).map(([k,l])=>`<button data-m="${k}">${l}</button>`).join("")}</div><div id="body" class="ex"></div>`);
+  <div class="seg" id="seg" style="grid-auto-columns:minmax(58px,1fr);overflow-x:auto">${[["search","Search"],["scan","Scan"],sample&&["describe","Describe"],sample&&["photo","Photo"],["saved","Saved"],["quick","Quick"],["manual","Manual"]].filter(Boolean).map(([k,l])=>`<button data-m="${k}">${l}</button>`).join("")}</div><div id="body" class="ex"></div>`);
   const body=w.querySelector("#body");
   function paint(){
     w.querySelectorAll("#seg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.m===mode)));
+    if(mode==="search"){body.innerHTML=`<input class="i" id="fq" type="search" placeholder="e.g. chicken breast, oats, banana" aria-label="Search foods" autocomplete="off"><div id="fqr"></div><div class="small muted">Searches your saved foods and the Australian Food Composition Database (FSANZ). Free, no AI. Can't find it? Try Scan or Describe.</div>`;
+      const q=body.querySelector("#fq"),out=body.querySelector("#fqr");let open=null;
+      const draw=async()=>{const v=q.value.trim().toLowerCase();if(v.length<2){out.innerHTML="";return}
+        const words=v.split(/\s+/),hit=n=>{const l=n.toLowerCase();return words.every(w=>l.includes(w))};
+        const mine=S.foods.filter(f=>hit(f.name)).slice(0,6).map(f=>({k:"s"+f.id,name:f.name,per:f.serving?`per ${f.serving}`:"per serve",cal:f.cal,p:f.p,c:f.c,f:f.f,saved:f}));
+        const db=(await afcdLoad()).filter(x=>hit(x[0])).sort((a,b)=>a[0].length-b[0].length).slice(0,20).map((x,i)=>({k:"a"+i+x[0].length,name:x[0],per:"per 100g",cal:x[1],p:x[2],c:x[3],f:x[4],g100:true}));
+        const all=[...mine,...db];draw.all=all;
+        out.innerHTML=all.length?`<div class="card" style="padding:4px 16px"><div class="list">${all.map(x=>`<div class="li" style="flex-wrap:wrap"><button class="open" data-fk="${x.k}"><div>${esc(x.name)}${x.saved?' <span class="pill">Saved</span>':""}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)} ${esc(x.per)}</div></button>${open===x.k?`<div class="row" style="width:100%;gap:8px;padding-bottom:10px"><input class="i num" id="fg" inputmode="decimal" value="${x.g100?100:1}" aria-label="${x.g100?"Grams":"Servings"}" style="flex:1"><span class="small muted">${x.g100?"g":"serves"}</span><button class="btn" id="fadd">Add</button></div>`:""}</div>`).join("")}</div></div>`:`<div class="empty">No match. Try fewer words, or use Scan or Describe.</div>`;
+        out.querySelectorAll("[data-fk]").forEach(b=>b.onclick=()=>{open=open===b.dataset.fk?null:b.dataset.fk;draw();setTimeout(()=>{const g=out.querySelector("#fg");if(g){g.focus();g.select()}},30)});
+        const fa=out.querySelector("#fadd");if(fa)fa.onclick=()=>{const x=all.find(y=>y.k===open),n=Number(out.querySelector("#fg").value)||0;if(!n){toast("Enter an amount");return}
+          if(x.saved){addItems([{name:n===1?x.name:`${x.name} ×${r1(n)}`,cal:x.cal*n,p:x.p*n,c:x.c*n,f:x.f*n}],false);write("foods/"+x.saved.id,r=>r.update({used:Date.now()}))}
+          else{const m=n/100;addItems([{name:`${x.name}, ${r0(n)}g`,cal:x.cal*m,p:x.p*m,c:x.c*m,f:x.f*m}],false)}}};
+      let t=null;q.oninput=()=>{clearTimeout(t);open=null;t=setTimeout(draw,150)};setTimeout(()=>q.focus(),50)}
     if(mode==="describe"){body.innerHTML=`<label class="f" for="fd">What did you eat?<textarea class="i" id="fd" placeholder="e.g. 200g chicken breast, 1 cup basmati rice, steamed broccoli"></textarea></label><button class="btn wide" id="go">Estimate</button><div id="res"></div>`;
       body.querySelector("#go").onclick=()=>estimate(body.querySelector("#fd").value.trim(),null)}
     if(mode==="photo"){body.innerHTML=`<label class="f" for="fp">Photo of the meal or the nutrition label<input class="i" type="file" id="fp" accept="image/jpeg,image/png,image/webp"></label><label class="f" for="fn">Anything the photo won't show (optional)<input class="i" id="fn" placeholder="e.g. cooked in 1 tbsp olive oil, about 300g"></label><button class="btn wide" id="go">Estimate from photo</button><div id="res"></div>`;
@@ -548,6 +561,7 @@ async function shrink(file,max){
     const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c}
   finally{URL.revokeObjectURL(url)}
 }
+let afcdP=null;function afcdLoad(){return afcdP||(afcdP=fetch("/afcd.json").then(r=>r.ok?r.json():[]).catch(()=>[]).then(a=>Array.isArray(a)?a:[]))}
 const okCode=s=>/^\d{8,14}$/.test(String(s||""));
 async function offLookup(code){
   try{
@@ -1452,7 +1466,7 @@ Reply with only JSON: {"name":"short program name","summary":"2 to 3 sentences o
     if(!sample){toast("The plan builder works when this page is open in Claude");return}
     gb.innerHTML=`<div class="card empty">Building your plan. This can take up to a minute.</div><button class="btn sec wide" id="gStop">Cancel</button>`;
     ctl=new AbortController();gb.querySelector("#gStop").onclick=()=>ctl.abort();
-    try{const r=normalise(await sample.json(prompt(rev),{signal:ctl.signal,cache:false}));if(!r)throw{code:"invalid_json"};result=r;preview()}
+    try{const r=normalise(await sample.json(prompt(rev),{signal:ctl.signal,cache:false,modelTier:"main",maxTokens:8000}));if(!r)throw{code:"invalid_json"};result=r;preview()}
     catch(e){if(result)preview();else form();if(!(e&&e.code==="cancelled"))toast(sampleErr(e))}
   }
   function preview(){
@@ -1792,10 +1806,10 @@ function context(){
   lines.push(`Today so far: ${tt.cal} cal, P ${tt.p} C ${tt.c} F ${tt.f}. Items: ${tf.map(f=>`${f.meal}: ${f.name} (${r0(f.cal)} cal, ${r0(f.p)}p)`).join("; ")||"nothing logged yet"}. Local time ${new Date().toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"})}.`);
   const past=[];for(let i=1;i<=7;i++){const d=addDays(t,-i),f=dayFoods(d);if(f.length){const x=totals(f);past.push(`${d}: ${x.cal} cal, ${x.p}p`)}}
   lines.push(`Previous 7 days of food: ${past.join("; ")||"none logged"}.`);
-  const ser=weightSeries().filter(p=>p.kg!=null).slice(-21);
+  const ser=weightSeries().filter(p=>p.kg!=null).slice(-14);
   lines.push(`Weigh-ins (date kg, trend): ${ser.map(p=>`${p.d} ${r1(p.kg)} (${r1(p.avg)})`).join("; ")||"none yet"}.`);
-  const ws=S.workouts.filter(w=>w.date>=addDays(t,-14));
-  lines.push(`Workouts in last 14 days: ${ws.map(w=>`${w.date} ${w.title}: ${isCardio(w)?cardioTxt(w):(w.exercises||[]).map(e=>`${e.name} ${setsTxt(e.sets)}`).join(" | ")}${w.notes?" (notes: "+w.notes+")":""}`).join(" || ")||"none logged"}.`);
+  const ws=S.workouts.filter(w=>w.date>=addDays(t,-7));
+  lines.push(`Workouts in last 7 days: ${ws.map(w=>`${w.date} ${w.title}: ${isCardio(w)?cardioTxt(w):(w.exercises||[]).map(e=>`${e.name} ${setsTxt(e.sets)}`).join(" | ")}${w.notes?" (notes: "+w.notes+")":""}`).join(" || ")||"none logged"}.`);
   const x=expenditure(),ck=checks(t);
   {const pd=[1,2,3,4,5,6,7].map(i=>totals(dayFoods(addDays(t,-i)))).filter(v=>v.cal>=500);lines.push(`Protein target hit on ${pd.filter(v=>v.p>=st.p*0.95).length} of ${pd.length} logged days this week.`);const pj=projection();if(pj&&!pj.done)lines.push(`Goal projection: ${r1(pj.cur-pj.gk)} kg to go to ${pj.gk} kg, estimated ${pj.eta} at ${r1(pj.rate||pj.plan)} kg/week${pj.vs!=null?` (${pj.vs<=0?Math.abs(pj.vs)+" days ahead of":pj.vs+" days behind"} the ${st.goalDate} target)`:""}.`)}
   {const lr=lossRate(),as=avgHabit("steps",7),sl=avgHabit("sleep",7),sa=stepAdvice();lines.push(`Steps target ${((S.settings.habits||{}).steps||{}).target||"none"}, hit on ${[1,2,3,4,5,6,7].filter(i=>habitOk(addDays(today(),-i),"steps")).length} of the last 7 days. Sleep 7-day average ${sl!=null?r1(sl)+"h":"not logged"}. Weight loss rate (last 2 weeks): ${lr?r1(lr.perWk)+" kg/week vs goal "+r1(lr.goal):"not enough data"}.${sa&&!sa.same?" App suggests changing steps to "+sa.to:""}`)}
@@ -1850,11 +1864,11 @@ async function send(text){
   text=(text||"").trim();if(!text||coachBusy)return;
   draft="";S.chat=[...S.chat,{role:"user",content:text}].slice(-40);coachBusy=true;liveText="";S.undo=null;S.lastChanges=null;render();
   coachCtl=new AbortController();
-  const turns=S.chat.slice(-20);while(turns.length&&turns[0].role!=="user")turns.shift();
-  const input=[{role:"user",content:rules()+"\n\nTHEIR CURRENT DATA:\n"+context()},...turns];
+  const turns=S.chat.slice(-8);while(turns.length&&turns[0].role!=="user")turns.shift();
+  const input=[{role:"user",content:"THEIR CURRENT DATA:\n"+context()},...turns];
   const changes=[];let canTools=false;
   try{const l=await sample.limits();canTools=!!(l&&l.tools)}catch(e){}
-  const opts={cache:false,signal:coachCtl.signal,onText:({text})=>{liveText=text;const l=$("#live");if(l){l.hidden=false;l.innerHTML=mdLite(text);l.scrollIntoView({block:"end"})}}};
+  const opts={cache:false,system:rules(),signal:coachCtl.signal,onText:({text})=>{liveText=text;const l=$("#live");if(l){l.hidden=false;l.innerHTML=mdLite(text);l.scrollIntoView({block:"end"})}}};
   if(canTools)opts.tools=coachTools(changes);
   try{
     const {text:ans}=await sample(input,opts);

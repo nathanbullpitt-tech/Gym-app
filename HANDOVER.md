@@ -50,6 +50,14 @@ Identity doesn't run under `netlify dev`, so test sign-in on a deploy preview. L
 - Installable to the home screen (manifest and icons). The icon follows the colour theme: blue by default, pink when the pink theme is on at the time of adding it.
 - Offline outbox and an offline banner.
 
+## Keeping credit use low
+- Everything uses the cheaper Haiku model except building a training plan (Sonnet).
+- Coach sends only the last 8 messages plus a trimmed data summary. The fixed instructions go in a cached system prompt.
+- Repeat JSON estimates (same prompt, no photo) are cached on the phone.
+- No background polling. The app syncs when it's opened or brought back to the foreground (at most once a minute).
+- Food search (saved foods plus FSANZ AFCD, downloaded at build time by `scripts/afcd.mjs`) is free and the default add mode.
+- Bundle changes into fewer pushes, because every production deploy costs credits.
+
 ## Ideas not done yet
 - Text search of Open Food Facts from the Saved tab.
 - Push reminders (weigh in, log food).
