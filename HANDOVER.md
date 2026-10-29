@@ -47,7 +47,7 @@ Identity doesn't run under `netlify dev`, so test sign-in on a deploy preview. L
 - Sign-in screen, plus sign out in Settings.
 - Live camera barcode scanning (BarcodeDetector, falling back to ZXing on iPhone) and Open Food Facts lookup.
 - Share buttons on saved workouts and "Share plan" in Train → Library. The other person opens the link, signs in and taps Add.
-- Installable to the home screen (manifest and icons).
+- Installable to the home screen (manifest and icons). The icon follows the colour theme: blue by default, pink when the pink theme is on at the time of adding it.
 - Offline outbox and an offline banner.
 
 ## Ideas not done yet

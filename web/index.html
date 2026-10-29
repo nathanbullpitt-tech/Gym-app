@@ -6,9 +6,9 @@
 <title>Kilo Coach</title>
 <meta name="description" content="Food, training, weight and an AI coach in one app.">
 <meta name="theme-color" content="#06080c">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" id="kcManifest" href="/manifest.webmanifest">
+<link rel="icon" id="kcIcon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" id="kcTouch" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -337,7 +337,8 @@ function setDayFoods(date,foods){S.days[date]={...(S.days[date]||{}),foods};rend
 function dayFoods(date){return (S.days[date]&&S.days[date].foods)||[]}
 function totals(foods){return foods.reduce((a,f)=>({cal:a.cal+r0(f.cal),p:a.p+r0(f.p),c:a.c+r0(f.c),f:a.f+r0(f.f)}),{cal:0,p:0,c:0,f:0})}
 
-function applyTheme(t){t=t||{};const c=t.c==="pink"?"pink":"blue",m=["light","dark"].includes(t.m)?t.m:"auto",r=document.documentElement;if(c==="blue"&&m==="auto"){delete r.dataset.kcc;delete r.dataset.kcm}else{r.dataset.kcc=c;r.dataset.kcm=m}try{localStorage.setItem("kc-theme",JSON.stringify({c,m}))}catch(e){}}
+function applyTheme(t){t=t||{};const c=t.c==="pink"?"pink":"blue",m=["light","dark"].includes(t.m)?t.m:"auto",r=document.documentElement;if(c==="blue"&&m==="auto"){delete r.dataset.kcc;delete r.dataset.kcm}else{r.dataset.kcc=c;r.dataset.kcm=m}try{localStorage.setItem("kc-theme",JSON.stringify({c,m}))}catch(e){}
+  {const pk=c==="pink",set=(id,h)=>{const l=document.getElementById(id);if(l&&l.getAttribute("href")!==h)l.setAttribute("href",h)};set("kcManifest",pk?"/manifest-pink.webmanifest":"/manifest.webmanifest");set("kcIcon",pk?"/icon-pink.svg":"/icon.svg");set("kcTouch",pk?"/apple-touch-icon-pink.png":"/apple-touch-icon.png");const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=pk?"#0b0609":"#06080c"}}
 try{applyTheme(JSON.parse(localStorage.getItem("kc-theme")||"null"))}catch(e){}
 function setTheme(t){applyTheme(t);const n={...S.settings,theme:t};S.settings=n;write("settings/main",r=>r.set(n))}
 async function boot(){
