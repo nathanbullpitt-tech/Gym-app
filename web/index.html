@@ -559,11 +559,11 @@ function openAddFood(meal){
     if(!text&&!file){toast("Describe what you ate first");return}
     const res=body.querySelector("#res"),go=body.querySelector("#go");go.disabled=true;res.innerHTML=`<div class="empty">Estimating…</div>`;
     const prompt=`Estimate nutrition for a food log entry. Use Australian products and typical portions. Split it into separate items when several foods are listed. ${file?"An image is attached: it is a photo of the meal or of a nutrition label. Estimate the portion shown.":""}
-Reply with only a JSON array like: [{"name":"200g chicken breast, grilled","cal":330,"p":62.1,"c":0,"f":7.2,"fib":0,"sug":0,"sat":2,"na":150}]. cal is a whole number, other values to 1 decimal place. fib is dietary fibre g, sug is sugars g, sat is saturated fat g, na is sodium mg.
+Reply with only a JSON array like: [{"name":"Chicken breast, grilled","g":200,"cal":330,"p":62.1,"c":0,"f":7.2,"fib":0,"sug":0,"sat":2,"na":150}]. g is the estimated weight of the portion in grams (use ml weight for drinks). cal is a whole number, other values to 1 decimal place. fib is dietary fibre g, sug is sugars g, sat is saturated fat g, na is sodium mg.
 Entry: ${text||"(see photo)"}`;
     try{
       const out=await sample.json(prompt,file?{images:file}:{modelTier:"quick"});
-      est=(Array.isArray(out)?out:[out]).filter(x=>x&&x.name).map(x=>({name:String(x.name).slice(0,80),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f),...xn(x)}));
+      est=(Array.isArray(out)?out:[out]).filter(x=>x&&x.name).map(x=>{const nm=String(x.name).slice(0,80),g=r0(x.g),it={name:nm,cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f),...xn(x)};if(g>0&&g<5000){const base={...it,name:nm.replace(/^\d+(\.\d+)?\s*(g|ml)\s*/i,""),g,sv:g+"g"};return amtItem(base,{n:g,u:"g"})}return it});
       if(!est.length)throw{code:"invalid_json"};
       res.innerHTML=`<div class="card" style="padding:4px 16px">${est.map((x,i)=>`<label class="est"><input type="checkbox" checked data-i="${i}"><div class="grow" style="flex:1;min-width:0"><div>${esc(x.name)}</div><div class="small muted num">${x.cal} cal · P ${x.p} · C ${x.c} · F ${x.f}${x.fib!=null?` · Fibre ${x.fib}`:""}</div></div></label>`).join("")}</div><label class="row small" style="margin-top:10px"><input type="checkbox" id="esave"> Save to my foods</label><button class="btn wide" id="addEst" style="margin-top:10px">Add to ${meal}</button><div class="small muted" style="margin-top:6px">Estimates. Switch to Manual if you have the label.</div>`;
       res.querySelector("#addEst").onclick=()=>addItems(est.filter((x,i)=>res.querySelector(`[data-i="${i}"]`).checked),res.querySelector("#esave").checked);
@@ -1391,12 +1391,14 @@ function openEditFood(d,id){
   function paint(){
     b.innerHTML=`<label class="f" for="efn">Food<input class="i" id="efn" value="${esc(f.name)}"></label>
     <div class="eyebrow">Amount</div><div id="efAmt" class="ex"></div>
-    <details${f.base?"":" open"}><summary class="small muted" style="cursor:pointer;padding:6px 0">Edit the numbers directly</summary><div class="grid4">${[["cal","Cal"],["p","Protein"],["c","Carbs"],["f","Fat"]].map(([k,l])=>`<label class="f" for="ef-${k}">${l}<input class="i num" id="ef-${k}" inputmode="decimal" value="${k==="cal"?r0(f[k]):r1(f[k])}"></label>`).join("")}</div></details>
+    <details><summary class="small muted" style="cursor:pointer;padding:6px 0">Edit the numbers directly</summary><div class="grid4">${[["cal","Cal"],["p","Protein"],["c","Carbs"],["f","Fat"]].map(([k,l])=>`<label class="f" for="ef-${k}">${l}<input class="i num" id="ef-${k}" inputmode="decimal" value="${k==="cal"?r0(f[k]):r1(f[k])}"></label>`).join("")}</div></details>
     <label class="f" for="efm">Meal<select class="i" id="efm">${MEALS.map(m=>`<option ${m===f.meal?"selected":""}>${m}</option>`).join("")}</select></label>
     <button class="btn wide" id="efSave">Save</button><button class="btn danger wide" id="efDel">Remove</button>`;
     const rd=()=>{f.name=b.querySelector("#efn").value.trim()||f.name;["cal","p","c","f"].forEach(k=>f[k]=k==="cal"?r0(b.querySelector("#ef-"+k).value):r1(b.querySelector("#ef-"+k).value));f.meal=b.querySelector("#efm").value};
-    {const base=f.base||{name:f.name,cal:f.cal,p:f.p,c:f.c,f:f.f,g:0,sv:"this entry"};
-     amountUI(b.querySelector("#efAmt"),base,f.amt?{...f.amt}:{n:1,u:"sv"},a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=k==="cal"?r0(it[k]):r1(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});Object.assign(f,xn(it));if(f.base){f.name=it.name;f.amt={...a};b.querySelector("#efn").value=f.name}else if(a.n!==1){f._mul=a.n}})}
+    {const gm=f.base?null:String(f.name).match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i);
+     const base=f.base||(gm?{name:String(f.name).replace(gm[0],"").replace(/^[\s,]+|[\s,]+$/g,"").replace(/\s{2,}/g," ")||f.name,cal:f.cal,p:f.p,c:f.c,f:f.f,...xn(f),g:+gm[1],sv:gm[1]+"g"}:{name:f.name,cal:f.cal,p:f.p,c:f.c,f:f.f,...xn(f),g:0,sv:"serve"});
+     const tracked=!!(f.base||gm);
+     amountUI(b.querySelector("#efAmt"),base,f.amt?{...f.amt}:gm?{n:+gm[1],u:"g"}:{n:1,u:"sv"},a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=k==="cal"?r0(it[k]):r1(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});Object.assign(f,xn(it));if(tracked){f.name=it.name;f.base=it.base;f.amt={...a};b.querySelector("#efn").value=f.name}})}
     b.querySelector("#efSave").onclick=()=>{rd();setDayFoods(d,dayFoods(d).map(x=>x.id===id?{...f}:x));closeSheet();toast("Updated")};
     b.querySelector("#efDel").onclick=()=>{setDayFoods(d,dayFoods(d).filter(x=>x.id!==id));closeSheet();toast("Removed")};
   }
