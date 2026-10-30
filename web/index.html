@@ -493,7 +493,7 @@ function openAddFood(meal){
   const body=w.querySelector("#body");
   function paint(){
     w.querySelectorAll("#seg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.m===mode)));
-    if(mode==="search"){body.innerHTML=`<input class="i" id="fq" type="search" placeholder="e.g. chicken breast, oats, banana" aria-label="Search foods" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><div id="fqr"></div><div class="small muted">Searches your recent and saved foods, the Australian food database (FSANZ) and, if you tap it, packaged brands. Free, no AI.</div>`;
+    if(mode==="search"){body.innerHTML=`<input class="i" id="fq" type="search" placeholder="e.g. chicken breast, oats, banana" aria-label="Search foods" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><div id="fqr"></div><div class="small muted">Searches everything you've logged or scanned before, your saved foods, meals and recipes, the Australian food database (FSANZ) and, if you tap it, packaged brands. Free, no AI.</div>`;
       const q=body.querySelector("#fq"),out=body.querySelector("#fqr");let open=null,brands=null,brandQ="",brandBusy=false;
       const recItem=(e,i)=>{const it=amtItem(e.base,e.amt);return {k:"r"+i,name:e.base.name,per:`${amtLabel(e.base,e.amt)} last time`,cal:it.cal,p:it.p,c:it.c,f:it.f,rbase:e.base,ramt:e.amt,recent:true}};
       const draw=async()=>{const v=q.value.trim().toLowerCase();
@@ -502,19 +502,22 @@ function openAddFood(meal){
         const words=v.split(/\s+/).map(foodWord).filter(Boolean),hit=n=>foodMatch(n,words);
         const mine=S.foods.filter(f=>f&&f.name&&hit(String(f.name))).slice(0,6).map(f=>({k:"s"+f.id,name:f.name,per:f.serving?`per ${f.serving}`:"per serve",cal:f.cal,p:f.p,c:f.c,f:f.f,saved:f}));
         const have=new Set(mine.map(x=>String(x.name).toLowerCase()));
-        const rec=recents.map(recItem).filter(x=>hit(String(x.name))&&!have.has(String(x.name).toLowerCase())).slice(0,6);
+        const rec=recents.map(recItem).filter(x=>hit(String(x.name))&&!have.has(String(x.name).toLowerCase())).slice(0,10);
+        const recs=(S.recipes||[]).filter(r=>r&&r.name&&r.per&&hit(String(r.name))).slice(0,5).map(r=>({k:"c"+r.id,name:r.name,per:"per serve",cal:r.per.cal,p:r.per.p,c:r.per.c,f:r.per.f,rbase:{name:r.name,cal:+r.per.cal||0,p:+r.per.p||0,c:+r.per.c||0,f:+r.per.f||0,g:0,sv:"serve"},ramt:{n:1,u:"sv"},recipe:true}));
+        const mls=(S.meals||[]).filter(m=>m&&m.name&&Array.isArray(m.items)&&hit(String(m.name))).slice(0,5).map(m=>{const t=totals(m.items);return {k:"m"+m.id,name:m.name,per:`${m.items.length} item${m.items.length>1?"s":""}`,cal:t.cal,p:t.p,c:t.c,f:t.f,mealObj:m}});
         const db=(await afcdLoad()).filter(x=>hit(x[0])).sort((a,b)=>a[0].length-b[0].length).slice(0,20).map((x,i)=>({k:"a"+i+x[0].length,name:x[0],per:"per 100g",cal:x[1],p:x[2],c:x[3],f:x[4],...(x.length>5?{fib:x[5],sug:x[6],sat:x[7],na:x[8]}:{}),g100:true}));
         const br=brands&&brandQ===v?brands.map((x,i)=>({k:"b"+i,name:x.name,per:`per ${x.sv}`,cal:x.cal,p:x.p,c:x.c,f:x.f,...xn(x),bbase:x,brand:true})):[];
-        const all=[...rec,...mine,...db,...br];draw.all=all;
+        const all=[...mls,...recs,...rec,...mine,...db,...br];draw.all=all;
         out.innerHTML=(all.length?listHtml(all):`<div class="empty">No match in your foods or the FSANZ database.</div>`)+
           (brandQ===v&&brands?(brands.length?"":`<div class="small muted" style="margin-top:8px">No packaged products found for "${esc(v)}".</div>`):`<button class="btn sec wide" id="fqb" style="margin-top:10px" ${brandBusy?"disabled":""}>${brandBusy?"Searching brands…":`Search brands for "${esc(q.value.trim())}"`}</button>`);
         bind(all);
         const fb=out.querySelector("#fqb");if(fb)fb.onclick=async()=>{brandBusy=true;draw();try{brands=await offSearch(v);brandQ=v}catch(e){brands=null;brandQ="";toast("Couldn't reach the brands database. Try again")}brandBusy=false;draw()}};
-      const listHtml=all=>`<div class="card" style="padding:4px 16px"><div class="list">${all.map(x=>`<div class="li" style="flex-wrap:wrap"><button class="open" data-fk="${x.k}"><div>${esc(x.name)}${x.saved?' <span class="pill">Saved</span>':x.recent?' <span class="pill">Recent</span>':x.brand?' <span class="pill">Brand</span>':""}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)} ${esc(x.per)}</div></button>${open===x.k?`<div class="ex" style="width:100%;padding-bottom:12px"><div id="famt" class="ex"></div><button class="btn wide" id="fadd">Add to ${meal}</button></div>`:""}</div>`).join("")}</div></div>`;
+      const listHtml=all=>`<div class="card" style="padding:4px 16px"><div class="list">${all.map(x=>`<div class="li" style="flex-wrap:wrap"><button class="open" data-fk="${x.k}"><div>${esc(x.name)}${x.saved?' <span class="pill">Saved</span>':x.recent?' <span class="pill">Logged before</span>':x.recipe?' <span class="pill">Recipe</span>':x.mealObj?' <span class="pill">Saved meal</span>':x.brand?' <span class="pill">Brand</span>':""}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)} ${esc(x.per)}</div></button>${open===x.k?`<div class="ex" style="width:100%;padding-bottom:12px">${x.mealObj?`<div class="small muted">${esc(x.mealObj.items.map(i=>i.name).join(", "))}</div>`:`<div id="famt" class="ex"></div>`}<button class="btn wide" id="fadd">Add to ${meal}</button></div>`:""}</div>`).join("")}</div></div>`;
       const bind=all=>{
         out.querySelectorAll("[data-fk]").forEach(b=>b.onclick=()=>{open=open===b.dataset.fk?null:b.dataset.fk;draw()});
         const fa=out.querySelector("#fadd");if(!fa)return;
         const x=all.find(y=>y.k===open);if(!x)return;
+        if(x.mealObj){fa.onclick=()=>{logItems(meal,x.mealObj.items);write("meals/"+x.mealObj.id,r=>r.update({used:Date.now()}));closeSheet();toast("Added "+x.mealObj.name)};return}
         const base=x.rbase?x.rbase:x.bbase?x.bbase:x.saved?savedBase(x.saved):{name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f,...xn(x),g:100,sv:"100g"};
         const init=x.ramt?{...x.ramt}:x.bbase&&x.bbase.servingG?{n:x.bbase.servingG,u:"g"}:undefined;
         const get=amountUI(out.querySelector("#famt"),base,init);
@@ -648,9 +651,9 @@ function entryBase(f){
   return {base:{name:String(f.name).replace(/\s*×\s*[\d.]+$/,""),...core,g:0,sv:"serve"},amt:{n:1,u:"sv"}};
 }
 function recentFoods(){
-  const seen=new Map(),ds=Object.keys(S.days).sort().reverse().slice(0,60);
+  const seen=new Map(),ds=Object.keys(S.days).sort().reverse();
   for(const d of ds)for(const f of [...dayFoods(d)].reverse()){if(!f||!f.name||/^quick add$/i.test(f.name))continue;const e=entryBase(f),key=String(e.base.name).toLowerCase();if(!seen.has(key))seen.set(key,e)}
-  return [...seen.values()].slice(0,40);
+  return [...seen.values()].slice(0,300);
 }
 function offParse(p){
   const n=p.nutriments||{},num=v=>v==null||v===""||isNaN(+v)?null:+v;
@@ -1014,7 +1017,7 @@ function waterCard(d){
   <div class="track"><span style="width:${pc}%;background:var(--mc)"></span></div>
   <div class="chips">${[0.25,0.5,1].map(q=>`<button class="chip" data-wadd="${q}">+${q*1000} ml</button>`).join("")}${v>0?`<button class="chip" data-wadd="-0.25" aria-label="Remove 250 ml">−250 ml</button>`:""}</div></div>`;
 }
-function logItems(meal,items,date){date=date||S.date;const add=items.map(x=>({id:uid(),meal,name:String(x.name).slice(0,80),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f)}));setDayFoods(date,[...dayFoods(date),...add])}
+function logItems(meal,items,date){date=date||S.date;const add=items.map(x=>({id:uid(),meal,name:String(x.name).slice(0,80),cal:r0(x.cal),p:r1(x.p),c:r1(x.c),f:r1(x.f),...xn(x),...(x.base?{base:x.base,amt:x.amt}:{})}));setDayFoods(date,[...dayFoods(date),...add])}
 function recipeItem(r,sv){return {name:`${r.name} (${r1(sv)} serve${sv===1?"":"s"})`,cal:r.per.cal*sv,p:r.per.p*sv,c:r.per.c*sv,f:r.per.f*sv}}
 function savedExtras(){
   let h="";
