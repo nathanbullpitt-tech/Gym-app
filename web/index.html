@@ -282,6 +282,14 @@ input.i.upkg{border-color:var(--good);font-weight:600}
 .np-t{display:flex;flex-direction:column;border-top:2px solid var(--ink);margin-top:6px}
 .np-r{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .np-r.sub{padding-left:14px;color:var(--muted)}
+.fold{padding:12px 16px}
+.foldh{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;min-height:36px;flex:1}
+.foldh b{font-weight:700}.fi{color:var(--muted);width:14px}
+.iconbtn.sm{width:36px;height:36px;font-size:18px;line-height:1;flex:none}
+.li.rt{gap:6px}
+.list.menu{display:flex;flex-direction:column}
+.mi{all:unset;cursor:pointer;padding:14px 4px;border-bottom:1px solid var(--line);font-size:16px}
+.mi.danger{color:var(--bad)}
 .scanov{position:fixed;inset:0;z-index:2000;background:#000;display:flex;flex-direction:column}
 .scanov video{flex:1;width:100%;height:100%;object-fit:cover;min-height:0}
 .scanov .frame{position:absolute;left:8%;right:8%;top:38%;height:22%;border:3px solid var(--accent);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);pointer-events:none}
@@ -406,15 +414,15 @@ async function checkShare(){
   const sh=await KC.getShare(code).catch(()=>null);
   if(!sh||!sh.payload){toast("That share link has expired or is wrong");return}
   const list=sh.kind==="plan"?(sh.payload.workouts||[]):[sh.payload];
-  const w=sheet(`<div class="sheet-h"><h2>Shared with you</h2>${closeBtn}</div><div class="small muted">${sh.kind==="plan"?`A plan with ${list.length} saved workouts`:"A saved workout"}. It copies the exercises, sets and reps only. You log your own weights, and nobody sees your stats.</div>
+  const w=sheet(`<div class="sheet-h"><h2>Shared with you</h2>${closeBtn}</div><div class="small muted">${sh.kind==="plan"?`A folder of ${list.length} routines`:"A routine"}. It copies the exercises, sets and reps only. You log your own weights, and nobody sees your stats.</div>
   ${list.map(x=>`<div class="card ex"><div style="font-weight:700">${esc(x.name)}</div><div class="small muted">${esc((x.exercises||[]).map(e=>e.name+(e.rx?` (${e.rx.split(",")[0]})`:"")).join(", "))}</div></div>`).join("")}
-  <button class="btn wide" id="shAdd">${sh.kind==="plan"?`Add all ${list.length} to my saved workouts`:"Add to my saved workouts"}</button>`);
+  <button class="btn wide" id="shAdd">${sh.kind==="plan"?`Add all ${list.length} routines`:"Add to my routines"}</button>`);
   w.querySelector("#shAdd").onclick=()=>{
     const taken=new Set(S.templates.map(t=>String(t.name).toLowerCase()));
     for(const x of list){let name=String(x.name||"Workout").slice(0,60);if(taken.has(name.toLowerCase()))name+=" (shared)";taken.add(name.toLowerCase());
       const id=uid(),doc={name,program:sh.kind==="plan"?String(sh.payload.name||"Shared plan").slice(0,60):"",exercises:(x.exercises||[]).slice(0,20).map(e=>({name:String(e.name).slice(0,80),rx:String(e.rx||"").slice(0,200),sets:(e.sets||[{}]).slice(0,10).map(z=>({kg:"",reps:z.reps??""}))}))};
       S.templates.push({id,...doc});write("templates/"+id,r=>r.set(doc))}
-    closeSheet();S.tab="train";S.trainView="library";render();toast(list.length>1?`Added ${list.length} saved workouts`:"Added to your saved workouts. Tap Plan to put it on your calendar");
+    closeSheet();S.tab="train";S.trainView="workout";render();toast(list.length>1?`Added ${list.length} routines`:"Added to your routines. Use ⋯ to plan it on your calendar");
   };
 }
 function banner(m){const b=$("#banner");b.textContent=m;b.hidden=false}
@@ -844,49 +852,106 @@ const setsTxt=sets=>(sets||[]).filter(s=>s.reps).map(s=>`${s.w?"warm-up ":""}${r
 const doneOn=d=>S.workouts.filter(w=>w.date===d);
 const clone=o=>JSON.parse(JSON.stringify(o));
 const blankEx=()=>({name:"",sets:[{kg:"",reps:""}]});
+/* ---------- TRAIN: Workout (routines in folders) / Calendar / History ---------- */
+const folderOf=t=>String((t&&t.program)||"").trim();
+function folderNames(){const set=new Set();(S.settings.folders||[]).forEach(f=>f&&set.add(String(f)));S.templates.forEach(t=>{const f=folderOf(t);if(f)set.add(f)});if(S.program&&S.program.name&&S.templates.some(t=>folderOf(t)===S.program.name)){set.delete(S.program.name);return [S.program.name,...[...set].sort()]}return [...set].sort()}
+const foldKey="kc-fold";function foldState(){try{return JSON.parse(localStorage.getItem(foldKey)||"{}")}catch(e){return {}}}
+function setFold(name,open){const f=foldState();f[name]=open;try{localStorage.setItem(foldKey,JSON.stringify(f))}catch(e){}}
+function saveTpl(t){const {id,...doc}=t;const i=S.templates.findIndex(x=>x.id===id);if(i>=0)S.templates[i]=t;else S.templates.push(t);write("templates/"+id,r=>r.set(doc))}
+function setFolders(list){const n={...S.settings,folders:[...new Set(list.filter(Boolean))]};S.settings=n;write("settings/main",r=>r.set(n))}
+function routineRow(x){return `<div class="li rt"><button class="open" data-t="${x.id}"><div style="font-weight:700">${esc(x.name)}</div><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((x.exercises||[]).map(e=>e.name).join(", "))||"No exercises yet"}</div></button><button class="iconbtn sm" data-rmenu="${x.id}" aria-label="More for ${esc(x.name)}">⋯</button><button class="add" data-start="${x.id}">Start</button></div>`}
+function folderCard(name,items,isLoose){
+  const fs=foldState(),open=fs[name]!==undefined?fs[name]:true;
+  return `<div class="card fold"><div class="row between"><button class="foldh" data-fold="${esc(name)}" aria-expanded="${open}"><span class="fi" aria-hidden="true">${open?"▾":"▸"}</span> <b>${esc(isLoose?"My routines":name)}</b> <span class="small muted">${items.length} routine${items.length===1?"":"s"}</span></button>${isLoose?"":`<button class="iconbtn sm" data-fmenu="${esc(name)}" aria-label="More for folder ${esc(name)}">⋯</button>`}</div>
+  ${open?(items.length?`<div class="list">${items.map(routineRow).join("")}</div>`:`<div class="small muted" style="padding:8px 0 2px">${isLoose?"Routines not in a folder show here.":"Empty folder. Use ⋯ on a routine to move it here."}</div>`):""}</div>`;
+}
 function renderTrain(){
-  const tv=S.trainView||"today",tseg=`<div class="seg">${[["today","Session"],["calendar","Calendar"],["library","Library"]].map(([k,l])=>`<button data-tv="${k}" aria-pressed="${tv===k}">${l}</button>`).join("")}</div>`;
+  let tv=S.trainView||"workout";if(tv==="today"||tv==="library")tv="workout";
+  const tseg=`<div class="seg">${[["workout","Workout"],["calendar","Calendar"],["history","History"]].map(([k,l])=>`<button data-tv="${k}" aria-pressed="${tv===k}">${l}</button>`).join("")}</div>`;
   const bindTV=()=>$("#p-train").querySelectorAll("[data-tv]").forEach(b=>b.onclick=()=>{S.trainView=b.dataset.tv;render();window.scrollTo(0,0)});
   if(tv==="calendar"){renderPlan($("#p-train"),tseg);bindTV();return}
-  const t=today(),recent=S.workouts.filter(w=>w.date>=addDays(t,-6)),pl=S.plan[t],done=doneOn(t).length>0;
-  const upcoming=Object.keys(S.plan).filter(d=>d>t&&d<=addDays(t,7)).sort();
-  let h="";
-  if(S.program){
-    const tp=pl&&S.templates.find(x=>x.id===pl.templateId),nextD=Object.keys(S.plan).filter(d=>d>t).sort()[0],nextT=nextD&&S.templates.find(x=>x.id===S.plan[nextD].templateId);
-    h=`<div class="row between"><div><h2>Today</h2><div class="small muted">${esc(fmtDate(t,{weekday:"long",day:"numeric",month:"long"}))}</div></div><div class="row" style="gap:6px"><button class="btn sec" id="newC">Cardio</button><button class="btn sec" id="newW">Empty workout</button></div></div>`;
-    if(done){const dw=doneOn(t);h+=`<div class="card ex"><div class="row between"><div style="font-family:var(--display);font-weight:700;font-size:28px;text-transform:uppercase;line-height:1">${esc(dw[0].title)}</div><span class="pill good">Done</span></div><div class="small muted">${dw.map(w=>isCardio(w)?esc(cardioTxt(w)):`${(w.exercises||[]).length} exercises · ${Math.round(vol(w)).toLocaleString()} kg lifted`).join(" · ")}</div>${nextD?`<div class="small muted">Next up: ${esc(S.plan[nextD].name)}, ${esc(fmtDate(nextD))}.</div>`:""}<button class="btn sec wide" data-w="${dw[0].id}">View session</button></div>`}
-    else if(pl)h+=`<div class="card ex" style="border-color:var(--accent)"><div class="eyebrow">${esc(S.program.name)}</div><div style="font-family:var(--display);font-weight:700;font-size:32px;text-transform:uppercase;line-height:1">${esc(pl.name)}</div>${tp?`<div class="list">${tp.exercises.map(e=>{const lt=lastTime(e.name,null);return `<div class="li" style="padding:9px 0"><div class="grow"><div>${esc(e.name)}</div>${lt?`<div class="small muted">Last time: ${esc(setsTxt(lt.sets))}</div>`:""}</div><div class="small num" style="white-space:nowrap;text-align:right;font-weight:700">${esc((e.rx||"").split(",")[0]||`${(e.sets||[]).length} sets`)}</div></div>`}).join("")}</div>`:""}<button class="btn wide" id="startPlan">Start workout</button></div>`;
-    else h+=`<div class="card ex"><div style="font-family:var(--display);font-weight:700;font-size:28px;text-transform:uppercase;line-height:1">Rest day</div><div class="small muted">${nextD?`Next up: ${esc(S.plan[nextD].name)}, ${esc(fmtDate(nextD))}.`:"Nothing else planned."} Get your steps in and hit your protein.</div>${nextT?`<button class="btn sec wide" id="trainAnyway">Do ${esc(nextT.name)} today instead</button>`:""}</div>`;
-    h+=`<div class="eyebrow" style="margin-top:6px">Training</div>`;
-  }else{
-    h=`<div class="row between"><h2>Training</h2><div class="row" style="gap:6px"><button class="btn sec" id="newC">Cardio</button><button class="btn sec" id="newW">Empty workout</button></div></div>`;
-    if(pl&&!done)h+=`<div class="card row between" style="border-color:var(--accent)"><div style="min-width:0"><div class="eyebrow">Planned today</div><div style="font-weight:700;font-size:17px">${esc(pl.name)}</div></div><button class="btn" id="startPlan">Start</button></div>`;
-    else if(done)h+=`<div class="card row"><span class="pill good">Done</span><div>Session logged today${pl?": "+esc(pl.name):""}.</div></div>`;
+  const t=today(),pl=S.plan[t],done=doneOn(t).length>0,p=$("#p-train");let h=tseg;
+  if(tv==="history"){
+    const recent=S.workouts.filter(w=>w.date>=addDays(t,-6));
+    h+=`<div class="card stats"><div class="stat"><div class="v num">${recent.length}</div><div class="l">Sessions, 7 days</div></div><div class="stat"><div class="v num">${Math.round(recent.reduce((a,w)=>a+vol(w),0)/100)/10}t</div><div class="l">Volume, 7 days</div></div><div class="stat"><div class="v num">${r1(recent.filter(isCardio).reduce((a,w)=>a+(+(w.cardio||{}).km||0),0))}</div><div class="l">Cardio km, 7 days</div></div></div>`;
+    h+=liftsCard();
+    h+=`<div class="eyebrow">Sessions</div><div class="card" style="padding:4px 16px">${S.workouts.length?`<div class="list">${S.workouts.slice(0,60).map(w=>`<div class="li"><button class="open" data-w="${w.id}"><div style="font-weight:700">${prsIn(w).length?'<span class="pill good">PR</span> ':""}${esc(w.title||"Workout")}</div><div class="small muted">${esc(fmtDate(w.date))} · ${isCardio(w)?esc(cardioTxt(w)):`${(w.exercises||[]).length} exercises · ${Math.round(vol(w)).toLocaleString()} kg${w.dur?` · ${w.dur} min`:""}`}</div></button><span class="muted">›</span></div>`).join("")}</div>`:`<div class="empty">No sessions logged yet.</div>`}</div>`;
+    p.innerHTML=h;bindTV();
+    p.querySelectorAll("[data-liftopen]").forEach(b=>b.onclick=()=>openLift(b.dataset.liftopen));
+    p.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>openSession(b.dataset.w));
+    return;
   }
+  // Workout view
+  const tp=pl&&S.templates.find(x=>x.id===pl.templateId),nextD=Object.keys(S.plan).filter(d=>d>t).sort()[0],nextT=nextD&&S.templates.find(x=>x.id===S.plan[nextD].templateId);
+  const fold=tp?folderOf(tp):(S.program?S.program.name:"");
+  if(done){const dw=doneOn(t);h+=`<div class="card ex"><div class="row between"><div><div class="eyebrow">Today</div><div style="font-family:var(--display);font-weight:700;font-size:28px;text-transform:uppercase;line-height:1">${esc(dw[0].title)}</div></div><span class="pill good">Done</span></div><div class="small muted">${dw.map(w=>isCardio(w)?esc(cardioTxt(w)):`${(w.exercises||[]).length} exercises · ${Math.round(vol(w)).toLocaleString()} kg lifted`).join(" · ")}</div>${nextD?`<div class="small muted">Next up: ${esc(S.plan[nextD].name)}, ${esc(fmtDate(nextD))}.</div>`:""}<button class="btn sec wide" data-w="${dw[0].id}">View session</button></div>`}
+  else if(pl)h+=`<div class="card ex" style="border-color:var(--accent)"><div class="eyebrow">Today${fold?" · "+esc(fold):""}</div><div class="row between"><div style="min-width:0"><div style="font-family:var(--display);font-weight:700;font-size:30px;text-transform:uppercase;line-height:1">${esc(pl.name)}</div>${tp?`<div class="small muted">${(tp.exercises||[]).length} exercises</div>`:""}</div><button class="btn" id="startPlan">Start</button></div>${tp?`<div class="list">${tp.exercises.map(e=>{const lt=lastTime(e.name,null);return `<div class="li" style="padding:9px 0"><div class="grow"><div>${esc(e.name)}</div>${lt?`<div class="small muted">Last time: ${esc(setsTxt(lt.sets))}</div>`:""}</div><div class="small num" style="white-space:nowrap;text-align:right;font-weight:700">${esc((e.rx||"").split(",")[0]||`${(e.sets||[]).length} sets`)}</div></div>`}).join("")}</div>`:""}</div>`;
+  else h+=`<div class="card ex"><div class="eyebrow">Today</div><div style="font-family:var(--display);font-weight:700;font-size:28px;text-transform:uppercase;line-height:1">Rest day</div><div class="small muted">${nextD?`Next up: ${esc(S.plan[nextD].name)}, ${esc(fmtDate(nextD))}.`:"Nothing planned."} Get your steps in and hit your protein.</div>${nextT?`<button class="btn sec wide" id="trainAnyway">Do ${esc(nextT.name)} today instead</button>`:""}</div>`;
+  h+=`<div class="row" style="gap:8px"><button class="btn sec" id="newW" style="flex:1">+ Start empty workout</button><button class="btn sec" id="newC">Cardio</button></div>`;
+  const names=folderNames(),loose=S.templates.filter(x=>!folderOf(x)||!names.includes(folderOf(x)));
+  h+=`<div class="row between" style="margin-top:6px"><div class="eyebrow">Routines</div><div class="row" style="gap:6px"><button class="chip" id="newT">+ Routine</button><button class="chip" id="newF" aria-label="New folder">+ Folder</button></div></div>`;
+  if(!S.templates.length&&!names.length)h+=`<div class="card empty">Save the sessions you repeat as routines, like Push, Pull and Legs, and group them into folders. Starting one fills in last time's weights so you know what to beat.</div>`;
+  names.forEach(n=>{h+=folderCard(n,S.templates.filter(x=>folderOf(x)===n),false)});
+  if(loose.length||!names.length&&S.templates.length)h+=folderCard("__loose",loose,true);
   h+=programCard();
-  const hSession=h;h="";
-  h+=`<div class="card stats"><div class="stat"><div class="v num">${recent.length}</div><div class="l">Sessions, 7 days</div></div><div class="stat"><div class="v num">${Math.round(recent.reduce((a,w)=>a+vol(w),0)/100)/10}t</div><div class="l">Volume, 7 days</div></div><div class="stat"><div class="v num">${r1(recent.filter(isCardio).reduce((a,w)=>a+(+(w.cardio||{}).km||0),0))}</div><div class="l">Cardio km, 7 days</div></div></div>`;
-  h+=`<div class="row between"><div class="eyebrow">Saved workouts</div><div class="row" style="gap:6px">${S.templates.length?`<button class="chip" id="shareAll">Share plan</button>`:""}<button class="chip" id="newT">+ New</button></div></div>
-  <div class="card" style="padding:4px 16px">${S.templates.length?`<div class="list">${S.templates.map(x=>`<div class="li"><button class="open" data-t="${x.id}"><div style="font-weight:700">${esc(x.name)}</div><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.program?esc(x.program)+" · ":""}${esc((x.exercises||[]).map(e=>e.name).join(", "))}</div></button><button class="shr" data-shr="${x.id}" aria-label="Share ${esc(x.name)}">${SHARE_ICON}</button><button class="chip" data-sched="${x.id}">Plan</button><button class="add" data-start="${x.id}">Start</button></div>`).join("")}</div>`:`<div class="empty">Save the sessions you repeat, like Push, Pull and Legs. Starting one fills in last time's weights so you know what to beat.</div>`}</div>`;
-  h+=liftsCard();
-  let hUp="";if(upcoming.length)hUp+=`<div class="eyebrow">Coming up</div><div class="card" style="padding:4px 16px"><div class="list">${upcoming.map(d=>`<div class="li"><div class="grow"><div style="font-weight:600">${esc(S.plan[d].name)}</div><div class="small muted">${esc(fmtDate(d))}</div></div></div>`).join("")}</div></div>`;
-  h+=`<div class="eyebrow">History</div><div class="card" style="padding:4px 16px">${S.workouts.length?`<div class="list">${S.workouts.slice(0,40).map(w=>`<div class="li"><button class="open" data-w="${w.id}"><div style="font-weight:700">${prsIn(w).length?'<span class="pill good">PR</span> ':""}${esc(w.title||"Workout")}</div><div class="small muted">${esc(fmtDate(w.date))} · ${isCardio(w)?esc(cardioTxt(w)):`${(w.exercises||[]).length} exercises · ${Math.round(vol(w)).toLocaleString()} kg${w.dur?` · ${w.dur} min`:""}`}</div></button><span class="muted">›</span></div>`).join("")}</div>`:`<div class="empty">No sessions logged yet.</div>`}</div>`;
-  h=tseg+(tv==="library"?`<div class="row between"><h2>Library</h2><div class="row" style="gap:6px"><button class="btn sec" id="newC">Cardio</button><button class="btn sec" id="newW">Empty workout</button></div></div>`+h:hSession+hUp);
-  const p=$("#p-train");p.innerHTML=h;bindTV();
+  const upcoming=Object.keys(S.plan).filter(d=>d>t&&d<=addDays(t,7)).sort();
+  if(upcoming.length)h+=`<div class="eyebrow">Coming up</div><div class="card" style="padding:4px 16px"><div class="list">${upcoming.map(d=>`<div class="li"><div class="grow"><div style="font-weight:600">${esc(S.plan[d].name)}</div><div class="small muted">${esc(fmtDate(d))}</div></div></div>`).join("")}</div></div>`;
+  p.innerHTML=h;bindTV();
   const on=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn};
   on("newW",()=>openWorkout({id:uid(),date:t,title:"",exercises:[blankEx()]},true,"workout"));
   on("genBtn",openGenerator);
   on("newC",()=>openCardio(null,true));
-  p.querySelectorAll("[data-liftopen]").forEach(b=>b.onclick=()=>openLift(b.dataset.liftopen));
   on("newT",()=>openWorkout({id:uid(),title:"",exercises:[blankEx()]},true,"template"));
+  on("newF",()=>openFolderName(null));
   const sp=$("#startPlan");if(sp)sp.onclick=()=>startPlanned(t);
-  const ta=$("#trainAnyway");if(ta)ta.onclick=()=>{const nd=Object.keys(S.plan).filter(d=>d>t).sort()[0];startTemplate(S.templates.find(x=>x.id===S.plan[nd].templateId),t)};
+  const ta=$("#trainAnyway");if(ta)ta.onclick=()=>startTemplate(nextT,t);
   p.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const x=clone(S.templates.find(y=>y.id===b.dataset.t));openWorkout({id:x.id,title:x.name,exercises:x.exercises.length?x.exercises:[blankEx()]},false,"template")});
   p.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>startTemplate(S.templates.find(y=>y.id===b.dataset.start),t));
-  p.querySelectorAll("[data-sched]").forEach(b=>b.onclick=()=>openSchedule(S.templates.find(y=>y.id===b.dataset.sched)));
-  p.querySelectorAll("[data-shr]").forEach(b=>b.onclick=()=>shareWorkout(S.templates.find(y=>y.id===b.dataset.shr)));
-  on("shareAll",sharePlan);
+  p.querySelectorAll("[data-rmenu]").forEach(b=>b.onclick=()=>openRoutineMenu(b.dataset.rmenu));
+  p.querySelectorAll("[data-fold]").forEach(b=>b.onclick=()=>{const n=b.dataset.fold,fs=foldState();setFold(n,!(fs[n]!==undefined?fs[n]:true));render()});
+  p.querySelectorAll("[data-fmenu]").forEach(b=>b.onclick=()=>openFolderMenu(b.dataset.fmenu));
   p.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>openSession(b.dataset.w));
+}
+function openRoutineMenu(id){
+  const x=S.templates.find(y=>y.id===id);if(!x)return;let armed=false;
+  const w=sheet(`<div class="sheet-h"><h2>${esc(x.name)}</h2>${closeBtn}</div><div class="small muted">${esc(folderOf(x)||"No folder")} · ${(x.exercises||[]).length} exercises</div><div class="list menu" id="rmb"></div>`),b=w.querySelector("#rmb");
+  const paint=()=>{b.innerHTML=[["edit","Edit"],["dup","Duplicate"],["move","Move to folder"],["plan","Plan on calendar"],["share","Share"],["del",armed?"Tap again to delete":"Delete"]].map(([k,l])=>`<button class="mi${k==="del"?" danger":""}" data-a="${k}">${l}</button>`).join("");
+    b.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>{const a=btn.dataset.a;
+      if(a==="edit"){closeSheet();const c=clone(x);openWorkout({id:c.id,title:c.name,exercises:c.exercises.length?c.exercises:[blankEx()]},false,"template")}
+      if(a==="dup"){const c=clone(x);c.id=uid();c.name=x.name+" copy";saveTpl(c);closeSheet();render();toast("Duplicated")}
+      if(a==="move"){openMoveFolder(x)}
+      if(a==="plan"){closeSheet();openSchedule(x)}
+      if(a==="share"){closeSheet();shareWorkout(x)}
+      if(a==="del"){if(!armed){armed=true;paint();return}S.templates=S.templates.filter(y=>y.id!==x.id);write("templates/"+x.id,r=>r.delete());closeSheet();render();toast("Routine deleted")}
+    })};
+  paint();
+}
+function openMoveFolder(x){
+  const names=folderNames(),cur=folderOf(x);
+  const w=sheet(`<div class="sheet-h"><h2>Move ${esc(x.name)}</h2>${closeBtn}</div><div class="list menu">${names.map(n=>`<button class="mi" data-f="${esc(n)}">${n===cur?"✓ ":""}${esc(n)}</button>`).join("")}<button class="mi" data-f="">${cur?"":"✓ "}No folder (My routines)</button></div><label class="f" for="nfn">Or a new folder<input class="i" id="nfn" placeholder="e.g. Hotel gym"></label><button class="btn sec wide" id="nfGo">Create and move</button>`);
+  const mv=f=>{saveTpl({...x,program:f});if(f&&!names.includes(f))setFolders([...(S.settings.folders||[]),f]);closeSheet();render();toast(f?`Moved to ${f}`:"Moved to My routines")};
+  w.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>mv(b.dataset.f));
+  w.querySelector("#nfGo").onclick=()=>{const v=w.querySelector("#nfn").value.trim().slice(0,40);if(!v){toast("Name the folder");return}mv(v)};
+}
+function openFolderName(old){
+  const w=sheet(`<div class="sheet-h"><h2>${old?"Rename folder":"New folder"}</h2>${closeBtn}</div><label class="f" for="fnm">Folder name<input class="i" id="fnm" value="${esc(old||"")}" placeholder="e.g. PPL, Hotel gym, Summer cut"></label><button class="btn wide" id="fnGo">${old?"Rename":"Create folder"}</button>`);
+  setTimeout(()=>w.querySelector("#fnm").focus(),50);
+  w.querySelector("#fnGo").onclick=()=>{const v=w.querySelector("#fnm").value.trim().slice(0,40);if(!v){toast("Name the folder");return}
+    if(old){S.templates.filter(x=>folderOf(x)===old).forEach(x=>saveTpl({...x,program:v}));setFolders((S.settings.folders||[]).map(f=>f===old?v:f).concat(v));const fs=foldState();if(old in fs)setFold(v,fs[old]);
+      if(S.program&&S.program.name===old){S.program={...S.program,name:v};const pr=S.program;write("programs/current",r=>r.set(pr))}}
+    else setFolders([...(S.settings.folders||[]),v]);
+    closeSheet();render();toast(old?"Folder renamed":"Folder created")};
+}
+function openFolderMenu(name){
+  const items=S.templates.filter(x=>folderOf(x)===name);let armed=false;
+  const w=sheet(`<div class="sheet-h"><h2>${esc(name)}</h2>${closeBtn}</div><div class="small muted">${items.length} routine${items.length===1?"":"s"}</div><div class="list menu" id="fmb"></div>`),b=w.querySelector("#fmb");
+  const paint=()=>{b.innerHTML=[["ren","Rename"],items.length&&["share","Share folder"],["del",armed?"Tap again: routines move to My routines":"Delete folder"]].filter(Boolean).map(([k,l])=>`<button class="mi${k==="del"?" danger":""}" data-a="${k}">${l}</button>`).join("");
+    b.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=async()=>{const a=btn.dataset.a;
+      if(a==="ren"){closeSheet();openFolderName(name)}
+      if(a==="share"){closeSheet();try{await KC.share("plan",name,{name,workouts:items.map(sharePayloadOf)})}catch(e){toast("Couldn't make a share link. Try again")}}
+      if(a==="del"){if(!armed){armed=true;paint();return}items.forEach(x=>saveTpl({...x,program:""}));setFolders((S.settings.folders||[]).filter(f=>f!==name));closeSheet();render();toast("Folder deleted")}
+    })};
+  paint();
 }
 function lastTime(name,exceptId){
   const n=(name||"").trim().toLowerCase();if(!n)return null;
@@ -926,7 +991,7 @@ function openWorkout(w,isNew,kind){
     return `<div class="swappanel"><div class="eyebrow">Swap ${esc(e.name)} for</div>${sw.opts.map((o,oi)=>`<div class="li" style="align-items:flex-start"><div class="grow"><div style="font-weight:600">${esc(o.name)}</div><div class="small muted">${esc(o.why)}</div></div><button class="add" data-swpick="${ei}-${oi}">Pick</button></div>`).join("")}<button class="btn sec" data-swx="${ei}">Cancel</button></div>`;
   };
   const names=[...new Set([...S.workouts,...S.templates].flatMap(x=>(x.exercises||[]).map(e=>e.name).filter(Boolean)))];
-  const w0=sheet(`<div class="sheet-h"><h2>${tpl?(isNew?"New saved workout":"Saved workout"):(isNew?"Workout":"Edit workout")}</h2><span class="pill num" id="sessT" hidden></span>${closeBtn}</div><div id="wb" class="ex"></div><datalist id="exnames">${names.map(n=>`<option value="${esc(n)}">`).join("")}</datalist><div class="restbar" id="restBar" hidden></div>`);
+  const w0=sheet(`<div class="sheet-h"><h2>${tpl?(isNew?"New routine":"Routine"):(isNew?"Workout":"Edit workout")}</h2><span class="pill num" id="sessT" hidden></span>${closeBtn}</div><div id="wb" class="ex"></div><datalist id="exnames">${names.map(n=>`<option value="${esc(n)}">`).join("")}</datalist><div class="restbar" id="restBar" hidden></div>`);
   const wb=w0.querySelector("#wb");
   clearInterval(sessT);if(!tpl&&w._start&&!w.dur){const el=w0.querySelector("#sessT");el.hidden=false;const tk=()=>{const sec=Math.round((Date.now()-w._start)/1000);el.textContent=sec>=3600?`${Math.floor(sec/3600)}:${fmtSecs(sec%3600).padStart(5,"0")}`:fmtSecs(sec)};tk();sessT=setInterval(tk,1000)}
   function paint(){
@@ -941,8 +1006,8 @@ function openWorkout(w,isNew,kind){
       ${e.sets.map((s,si)=>`<div class="setrow ${L?"l5":""}"><button class="sn ${s.w?"wu":""}" data-wu="${ei}-${si}" aria-label="Set ${si+1}${s.w?", warm-up":""}. Tap to toggle warm-up">${s.w?"W":si+1}</button><input class="i num ${UP&&e._upDone&&+s.kg===+e._up.to?"upkg":""}" id="sk-${ei}-${si}" inputmode="decimal" value="${esc(s.kg)}" data-k="${ei}-${si}" aria-label="Set ${si+1} weight"><input class="i num" id="sr-${ei}-${si}" inputmode="numeric" value="${esc(s.reps)}" data-r="${ei}-${si}" aria-label="Set ${si+1} reps">${L?`<div class="small muted num" style="text-align:right;white-space:nowrap">${lt.sets&&lt.sets[si]?r1(lt.sets[si].kg)+"×"+lt.sets[si].reps:""}</div>`:""}<button class="x" data-rmset="${ei}-${si}" aria-label="Remove set">×</button></div>`).join("")}
       <button class="btn sec" data-addset="${ei}">+ Set</button></div>`}).join("")}
     <button class="btn sec wide" id="addEx">+ Exercise</button>`+
-    (tpl?"":`<label class="f" for="wn">Notes<textarea class="i" id="wn" placeholder="How it felt, anything sore">${esc(w.notes||"")}</textarea></label>${!w.templateId||!isNew?`<label class="row small card" style="padding:12px 14px;gap:10px" for="asT"><input type="checkbox" id="asT" ${w._asT?"checked":""}> <span><b>Save as a saved workout</b><br><span class="muted">Adds it to your Library so you can start it again or plan it.</span></span></label>`:""}`)+
-    `<button class="btn wide" id="wSave">${tpl?"Save":"Save workout"}</button>${isNew?"":`<button class="btn danger wide" id="wDel">${armed?"Tap again to delete":(tpl?"Delete saved workout":"Delete workout")}</button>`}`;
+    (tpl?"":`<label class="f" for="wn">Notes<textarea class="i" id="wn" placeholder="How it felt, anything sore">${esc(w.notes||"")}</textarea></label>${!w.templateId||!isNew?`<label class="row small card" style="padding:12px 14px;gap:10px" for="asT"><input type="checkbox" id="asT" ${w._asT?"checked":""}> <span><b>Save as a routine</b><br><span class="muted">Adds it to your routines so you can start it again or plan it.</span></span></label>`:""}`)+
+    `<button class="btn wide" id="wSave">${tpl?"Save":"Save workout"}</button>${isNew?"":`<button class="btn danger wide" id="wDel">${armed?"Tap again to delete":(tpl?"Delete routine":"Delete workout")}</button>`}`;
     wb.querySelector("#wt").oninput=e=>w.title=e.target.value;
     const wd=wb.querySelector("#wd");if(wd)wd.oninput=e=>w.date=e.target.value;
     const wn=wb.querySelector("#wn");if(wn)wn.oninput=e=>w.notes=e.target.value;
@@ -988,21 +1053,21 @@ function openWorkout(w,isNew,kind){
     wb.querySelector("#wSave").onclick=()=>{
       const exs=w.exercises.filter(e=>(e.name||"").trim());
       if(!exs.length){toast("Add at least one exercise");return}
-      if(!tpl&&w._asT&&!(w.title||"").trim()){toast("Give the session a name so you can find it in your Library");const t=wb.querySelector("#wt");if(t)t.focus();return}
+      if(!tpl&&w._asT&&!(w.title||"").trim()){toast("Give the session a name so you can find it in your routines");const t=wb.querySelector("#wt");if(t)t.focus();return}
       if(tpl){
         const clean={name:(w.title||"").trim()||"Workout",exercises:exs.map(e=>({name:e.name.trim(),rx:e.rx||"",sets:e.sets.map(s=>({kg:s.kg===""?"":r1(s.kg),reps:s.reps===""?"":r0(s.reps)}))}))};
         const i=S.templates.findIndex(x=>x.id===w.id);if(i>=0)S.templates[i]={id:w.id,...clean};else S.templates.push({id:w.id,...clean});
-        write("templates/"+w.id,r=>r.set(clean));closeSheet();render();toast("Saved workout saved");return;
+        write("templates/"+w.id,r=>r.set(clean));closeSheet();render();toast("Routine saved");return;
       }
       const clean={date:w.date||today(),title:(w.title||"").trim()||"Workout",notes:(w.notes||"").trim(),templateId:w.templateId||null,exercises:exs.map(e=>({name:e.name.trim(),sets:e.sets.filter(s=>s.reps!==""&&Number(s.reps)>0).map(s=>({kg:r1(s.kg),reps:r0(s.reps),...(s.w?{w:true}:{})}))})),...(w.dur?{dur:w.dur}:w._start?{dur:Math.max(1,Math.round((Date.now()-w._start)/60000))}:{})};
       const i=S.workouts.findIndex(x=>x.id===w.id),rec={id:w.id,...clean};if(i>=0)S.workouts[i]=rec;else S.workouts.unshift(rec);S.workouts.sort((a,b)=>b.date.localeCompare(a.date));
       write("workouts/"+w.id,r=>r.set(clean));
       if(w._asT){const tid=uid(),src=exs,tp={name:clean.title,exercises:src.map(e=>({name:e.name.trim(),rx:e.rx||"",sets:(e.sets.filter(s=>!s.w).length?e.sets.filter(s=>!s.w):[{reps:""}]).map(s=>({kg:"",reps:s.reps===""?"":r0(s.reps)}))}))};S.templates.push({id:tid,...tp});write("templates/"+tid,r=>r.set(tp))}
-      const prs=prsIn(rec);closeSheet();render();toast(prs.length?"New PR: "+prs.map(x=>x.name).join(", "):w._asT?"Saved, and added to your Library":"Workout saved");
+      const prs=prsIn(rec);closeSheet();render();toast(prs.length?"New PR: "+prs.map(x=>x.name).join(", "):w._asT?"Saved, and added to your routines":"Workout saved");
     };
     const del=wb.querySelector("#wDel");if(del)del.onclick=()=>{
       if(!armed){armed=true;paint();return}
-      if(tpl){S.templates=S.templates.filter(x=>x.id!==w.id);write("templates/"+w.id,r=>r.delete());toast("Saved workout deleted")}
+      if(tpl){S.templates=S.templates.filter(x=>x.id!==w.id);write("templates/"+w.id,r=>r.delete());toast("Routine deleted")}
       else{S.workouts=S.workouts.filter(x=>x.id!==w.id);write("workouts/"+w.id,r=>r.delete());toast("Workout deleted")}
       closeSheet();render();
     };
