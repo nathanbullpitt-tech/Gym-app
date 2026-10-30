@@ -420,7 +420,8 @@ async function checkShare(){
 function banner(m){const b=$("#banner");b.textContent=m;b.hidden=false}
 
 /* ---------- tabs ---------- */
-document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render();window.scrollTo(0,0)});
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render();if(S.tab==="coach")coachToBottom();else window.scrollTo(0,0)});
+function coachToBottom(){const go=()=>window.scrollTo(0,document.documentElement.scrollHeight);go();requestAnimationFrame(go);setTimeout(go,120)}
 $("#btnSettings").onclick=openSettings;
 
 function render(){
@@ -492,11 +493,11 @@ function openAddFood(meal){
   const body=w.querySelector("#body");
   function paint(){
     w.querySelectorAll("#seg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.m===mode)));
-    if(mode==="search"){body.innerHTML=`<input class="i" id="fq" type="search" placeholder="e.g. chicken breast, oats, banana" aria-label="Search foods" autocomplete="off"><div id="fqr"></div><div class="small muted">Searches your saved foods and the Australian Food Composition Database (FSANZ). Free, no AI. Can't find it? Try Scan or Describe.</div>`;
+    if(mode==="search"){body.innerHTML=`<input class="i" id="fq" type="search" placeholder="e.g. chicken breast, oats, banana" aria-label="Search foods" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><div id="fqr"></div><div class="small muted">Searches your saved foods and the Australian Food Composition Database (FSANZ). Free, no AI. Can't find it? Try Scan or Describe.</div>`;
       const q=body.querySelector("#fq"),out=body.querySelector("#fqr");let open=null;
       const draw=async()=>{const v=q.value.trim().toLowerCase();if(v.length<2){out.innerHTML="";return}
-        const words=v.split(/\s+/),hit=n=>{const l=n.toLowerCase();return words.every(w=>l.includes(w))};
-        const mine=S.foods.filter(f=>hit(f.name)).slice(0,6).map(f=>({k:"s"+f.id,name:f.name,per:f.serving?`per ${f.serving}`:"per serve",cal:f.cal,p:f.p,c:f.c,f:f.f,saved:f}));
+        const words=v.split(/\s+/).map(foodWord).filter(Boolean),hit=n=>foodMatch(n,words);
+        const mine=S.foods.filter(f=>f&&f.name&&hit(String(f.name))).slice(0,6).map(f=>({k:"s"+f.id,name:f.name,per:f.serving?`per ${f.serving}`:"per serve",cal:f.cal,p:f.p,c:f.c,f:f.f,saved:f}));
         const db=(await afcdLoad()).filter(x=>hit(x[0])).sort((a,b)=>a[0].length-b[0].length).slice(0,20).map((x,i)=>({k:"a"+i+x[0].length,name:x[0],per:"per 100g",cal:x[1],p:x[2],c:x[3],f:x[4],...(x.length>5?{fib:x[5],sug:x[6],sat:x[7],na:x[8]}:{}),g100:true}));
         const all=[...mine,...db];draw.all=all;
         out.innerHTML=all.length?`<div class="card" style="padding:4px 16px"><div class="list">${all.map(x=>`<div class="li" style="flex-wrap:wrap"><button class="open" data-fk="${x.k}"><div>${esc(x.name)}${x.saved?' <span class="pill">Saved</span>':""}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)} ${esc(x.per)}</div></button>${open===x.k?`<div class="ex" style="width:100%;padding-bottom:12px"><div id="famt" class="ex"></div><button class="btn wide" id="fadd">Add to ${meal}</button></div>`:""}</div>`).join("")}</div></div>`:`<div class="empty">No match. Try fewer words, or use Scan or Describe.</div>`;
@@ -610,6 +611,20 @@ function amountUI(host,base,a,onChange){
   paint();return ()=>a;
 }
 function savedBase(f){const g=(String(f.serving||"").match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i)||[])[1];return {name:f.name,cal:+f.cal||0,p:+f.p||0,c:+f.c||0,f:+f.f||0,...xn(f),g:g?+g:0,sv:f.serving||"serve"}}
+/* Food search matching: forgiving of plurals, spelling variants and small typos. */
+const FOOD_SYN={yogurt:"yoghurt",yoghurts:"yoghurt",ground:"mince",hamburger:"burger",fries:"chips",chickpeas:"chickpea",oatmeal:"oats",porridge:"oats",capsicums:"capsicum",zucchinis:"zucchini",tomatoes:"tomato",potatoes:"potato",eggs:"egg",prawns:"prawn",avo:"avocado"};
+function foodWord(w){w=String(w||"").toLowerCase().replace(/[^a-z0-9]/g,"");if(!w)return "";return FOOD_SYN[w]||w}
+function editDist(a,b){if(Math.abs(a.length-b.length)>2)return 9;const d=Array.from({length:a.length+1},(_,i)=>[i]);for(let j=1;j<=b.length;j++)d[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[a.length][b.length]}
+function foodMatch(name,words){
+  const l=name.toLowerCase(),toks=l.split(/[^a-z0-9]+/).filter(Boolean);
+  return words.every(w=>{
+    if(l.includes(w))return true;
+    const stem=w.length>4?w.replace(/(es|s)$/,""):w;if(stem!==w&&l.includes(stem))return true;
+    if(w.length<5)return false;
+    const tol=w.length>=8?2:1;
+    return toks.some(t=>editDist(w,t.slice(0,w.length))<=tol||editDist(w,t)<=tol);
+  });
+}
 let afcdP=null;function afcdLoad(){return afcdP||(afcdP=fetch("/afcd.json").then(r=>r.ok?r.json():[]).catch(()=>[]).then(a=>Array.isArray(a)?a:[]))}
 const okCode=s=>/^\d{8,14}$/.test(String(s||""));
 async function offLookup(code){
