@@ -616,22 +616,37 @@ async function shrink(file,max){
 }
 /* Amount picker (MyFitnessPal style): number + unit (grams or servings), -/+ steppers, quick chips, live macros.
    base = {name, cal,p,c,f per serving, g: grams in one serving (0 if unknown), sv: serving label} */
-function amtFactor(base,a){return a.u==="g"?(base.g?a.n/base.g:0):a.n}
-function amtLabel(base,a){return a.u==="g"?`${r0(a.n)}g`:(a.n===1?(base.sv&&base.sv!=="serve"?base.sv:"1 serve"):`${r1(a.n)} × ${base.sv||"serve"}`)}
+/* Units: g (grams), ml (treated as grams), oz, sv (one serving), h (100 g) */
+const UNIT_G={g:1,ml:1,oz:28.35,h:100};
+function amtFactor(base,a){if(a.u==="sv")return a.n;const k=UNIT_G[a.u];return base.g&&k?a.n*k/base.g:0}
+function amtLabel(base,a){const n=a.u==="g"||a.u==="ml"?r0(a.n):r1(a.n);
+  if(a.u==="g")return `${n}g`;if(a.u==="ml")return `${n}ml`;if(a.u==="oz")return `${n} oz`;if(a.u==="h")return `${n} × 100g`;
+  return a.n===1?(base.sv&&base.sv!=="serve"?base.sv:"1 serve"):`${r1(a.n)} × ${base.sv||"serve"}`}
 function amtItem(base,a){const m=amtFactor(base,a);return {name:`${base.name}, ${amtLabel(base,a)}`,cal:base.cal*m,p:base.p*m,c:base.c*m,f:base.f*m,...xn(base,m),base:{name:base.name,cal:base.cal,p:base.p,c:base.c,f:base.f,...xn(base),g:base.g||0,sv:base.sv||""},amt:{n:a.n,u:a.u}}}
+function amtConvert(base,a,u){const grams=a.u==="sv"?a.n*(base.g||0):a.n*(UNIT_G[a.u]||1);if(u==="sv")return base.g?r1(grams/base.g):1;const v=grams/(UNIT_G[u]||1);return u==="g"||u==="ml"?r0(v):r1(v)}
 function amountUI(host,base,a,onChange){
   a=a||{n:base.g&&base.sv==="100g"?100:1,u:base.g&&base.sv==="100g"?"g":"sv"};
-  const chips=()=>a.u==="g"?[50,100,150,200,250]:[0.5,1,1.5,2,3];
-  const paint=()=>{const m=amtFactor(base,a);
-    host.innerHTML=`<div class="amt"><button class="iconbtn" data-st="-1" aria-label="Less">−</button><input class="i num" id="amtN" inputmode="decimal" value="${a.u==="g"?r0(a.n):r1(a.n)}" aria-label="Amount"><button class="iconbtn" data-st="1" aria-label="More">+</button>
-      <select class="i" id="amtU" aria-label="Unit">${base.g?`<option value="g" ${a.u==="g"?"selected":""}>grams</option>`:""}<option value="sv" ${a.u==="sv"?"selected":""}>${base.sv==="100g"?"× 100g":`serving${base.sv&&base.sv!=="serve"?` (${esc(base.sv)})`:"s"}`}</option></select></div>
-      <div class="chips">${chips().map(c=>`<button class="chip ${+a.n===c?"on":""}" data-q="${c}">${a.u==="g"?c+"g":(c===0.5?"½":c===1.5?"1½":c)}</button>`).join("")}</div>
-      <div class="amtmac num"><b>${r0(base.cal*m)}</b> cal · P ${r1(base.p*m)}g · C ${r1(base.c*m)}g · F ${r1(base.f*m)}g${base.fib!=null?` · Fibre ${r1(base.fib*m)}g`:""}</div>`;
+  const liquid=/ml\b/i.test(String(base.sv||""));
+  const units=()=>{const u=[];if(base.g){u.push(["g","grams"]);if(liquid)u.push(["ml","ml"]);u.push(["oz","oz"])}
+    u.push(["sv",base.sv==="100g"?"× 100g":`serving${base.sv&&base.sv!=="serve"?` (${base.sv})`:"s"}`]);
+    if(base.g&&base.sv!=="100g")u.push(["h","× 100g"]);
+    if(!base.g)u.push(["setg","grams (set the serving weight)"]);return u};
+  const chips=()=>({g:[50,100,150,200,250],ml:[100,200,250,375,500],oz:[1,2,4,6,8],h:[0.5,1,1.5,2,3]})[a.u]||[0.5,1,1.5,2,3];
+  const chipLbl=c=>a.u==="g"?c+"g":a.u==="ml"?c+"ml":a.u==="oz"?c+" oz":c===0.5?"½":c===1.5?"1½":c;
+  const mac=()=>{const m=amtFactor(base,a);return `<b>${r0(base.cal*m)}</b> cal · P ${r1(base.p*m)}g · C ${r1(base.c*m)}g · F ${r1(base.f*m)}g${base.fib!=null?` · Fibre ${r1(base.fib*m)}g`:""}`};
+  let setting=false;
+  const paint=()=>{const big=a.u==="g"||a.u==="ml";
+    host.innerHTML=`<div class="amt"><button class="iconbtn" data-st="-1" aria-label="Less">−</button><input class="i num" id="amtN" inputmode="decimal" value="${big?r0(a.n):r1(a.n)}" aria-label="Amount"><button class="iconbtn" data-st="1" aria-label="More">+</button>
+      <select class="i" id="amtU" aria-label="Unit">${units().map(([v,l])=>`<option value="${v}" ${a.u===v?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
+      ${setting?`<div class="row" style="gap:8px"><input class="i num" id="amtSG" inputmode="decimal" placeholder="Grams in one serving" style="flex:1"><button class="btn sec" id="amtSGo">Set</button></div>`:""}
+      <div class="chips">${chips().map(c=>`<button class="chip ${+a.n===c?"on":""}" data-q="${c}">${chipLbl(c)}</button>`).join("")}</div>
+      <div class="amtmac num">${mac()}</div>`;
     const n=host.querySelector("#amtN");
-    n.oninput=()=>{a.n=Math.max(0,Number(n.value)||0);const mm=amtFactor(base,a);host.querySelector(".amtmac").innerHTML=`<b>${r0(base.cal*mm)}</b> cal · P ${r1(base.p*mm)}g · C ${r1(base.c*mm)}g · F ${r1(base.f*mm)}g${base.fib!=null?` · Fibre ${r1(base.fib*mm)}g`:""}`;host.querySelectorAll("[data-q]").forEach(b=>b.classList.toggle("on",+b.dataset.q===a.n));onChange&&onChange(a)};
+    n.oninput=()=>{a.n=Math.max(0,Number(n.value)||0);host.querySelector(".amtmac").innerHTML=mac();host.querySelectorAll("[data-q]").forEach(b=>b.classList.toggle("on",+b.dataset.q===a.n));onChange&&onChange(a)};
     n.onfocus=()=>n.select();
-    host.querySelector("#amtU").onchange=e=>{const u=e.target.value;if(u===a.u)return;a.n=u==="g"?r0(a.n*(base.g||100)):r1(a.n/(base.g||1));a.u=u;paint();onChange&&onChange(a)};
-    host.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{const st=a.u==="g"?10:0.5;a.n=Math.max(0,r1((Number(a.n)||0)+st*+b.dataset.st));paint();onChange&&onChange(a)});
+    host.querySelector("#amtU").onchange=e=>{const u=e.target.value;if(u==="setg"){setting=true;paint();setTimeout(()=>{const x=host.querySelector("#amtSG");x&&x.focus()},30);return}if(u===a.u)return;a.n=amtConvert(base,a,u);a.u=u;paint();onChange&&onChange(a)};
+    const sg=host.querySelector("#amtSGo");if(sg)sg.onclick=()=>{const g=+host.querySelector("#amtSG").value;if(!(g>0)){toast("Enter how many grams one serving weighs");return}base.g=g;if(!base.sv||base.sv==="serve")base.sv=`${r0(g)}g`;a={n:r0(a.n*g),u:"g"};setting=false;paint();onChange&&onChange(a)};
+    host.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{const st=a.u==="g"||a.u==="ml"?10:a.u==="oz"?1:0.5;a.n=Math.max(0,r1((Number(a.n)||0)+st*+b.dataset.st));paint();onChange&&onChange(a)});
     host.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{a.n=+b.dataset.q;paint();onChange&&onChange(a)});
   };
   paint();return ()=>a;
@@ -1509,7 +1524,7 @@ function openEditFood(d,id){
     <button class="btn wide" id="efSave">Save</button><button class="btn danger wide" id="efDel">Remove</button>`;
     const rd=()=>{f.name=b.querySelector("#efn").value.trim()||f.name;["cal","p","c","f"].forEach(k=>f[k]=k==="cal"?r0(b.querySelector("#ef-"+k).value):r1(b.querySelector("#ef-"+k).value));f.meal=b.querySelector("#efm").value};
     {const eb=entryBase(f),base=eb.base,tracked=!!(f.base||base.g);
-     const getA=amountUI(b.querySelector("#efAmt"),base,eb.amt,a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=k==="cal"?r0(it[k]):r1(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});Object.assign(f,xn(it));if(tracked){f.name=it.name;f.base=it.base;f.amt={...a};b.querySelector("#efn").value=f.name}});
+     const getA=amountUI(b.querySelector("#efAmt"),base,eb.amt,a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=k==="cal"?r0(it[k]):r1(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});Object.assign(f,xn(it));if(tracked||base.g){f.name=it.name;f.base=it.base;f.amt={...a};b.querySelector("#efn").value=f.name}});
      const fx=b.querySelector("#efFix");fx.onclick=()=>{const a=getA(),gNow=a.u==="g"?a.n:base.g?r0(a.n*base.g):"";
        fx.outerHTML=`<div class="card ex" id="efFixBox"><div class="eyebrow">Fix the numbers for ${esc(base.name)}</div><div class="small muted">Copy the per 100g column from the label, or the product page on the Woolies or Coles website for deli items. Kilo Coach remembers it, so next time it's in Search with the right numbers.</div>
        <div class="grid2"><label class="f" for="fxkj">Energy kJ<input class="i num" id="fxkj" inputmode="decimal"></label><label class="f" for="fxcal">or Calories<input class="i num" id="fxcal" inputmode="decimal"></label></div>
