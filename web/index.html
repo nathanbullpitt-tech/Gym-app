@@ -493,18 +493,33 @@ function openAddFood(meal){
   const body=w.querySelector("#body");
   function paint(){
     w.querySelectorAll("#seg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.m===mode)));
-    if(mode==="search"){body.innerHTML=`<input class="i" id="fq" type="search" placeholder="e.g. chicken breast, oats, banana" aria-label="Search foods" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><div id="fqr"></div><div class="small muted">Searches your saved foods and the Australian Food Composition Database (FSANZ). Free, no AI. Can't find it? Try Scan or Describe.</div>`;
-      const q=body.querySelector("#fq"),out=body.querySelector("#fqr");let open=null;
-      const draw=async()=>{const v=q.value.trim().toLowerCase();if(v.length<2){out.innerHTML="";return}
+    if(mode==="search"){body.innerHTML=`<input class="i" id="fq" type="search" placeholder="e.g. chicken breast, oats, banana" aria-label="Search foods" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><div id="fqr"></div><div class="small muted">Searches your recent and saved foods, the Australian food database (FSANZ) and, if you tap it, packaged brands. Free, no AI.</div>`;
+      const q=body.querySelector("#fq"),out=body.querySelector("#fqr");let open=null,brands=null,brandQ="",brandBusy=false;
+      const recItem=(e,i)=>{const it=amtItem(e.base,e.amt);return {k:"r"+i,name:e.base.name,per:`${amtLabel(e.base,e.amt)} last time`,cal:it.cal,p:it.p,c:it.c,f:it.f,rbase:e.base,ramt:e.amt,recent:true}};
+      const draw=async()=>{const v=q.value.trim().toLowerCase();
+        const recents=recentFoods();
+        if(v.length<2){const rs=recents.slice(0,12).map(recItem);draw.all=rs;out.innerHTML=rs.length?`<div class="eyebrow" style="margin:4px 0 6px">Recent</div>`+listHtml(rs):"";bind(rs);return}
         const words=v.split(/\s+/).map(foodWord).filter(Boolean),hit=n=>foodMatch(n,words);
         const mine=S.foods.filter(f=>f&&f.name&&hit(String(f.name))).slice(0,6).map(f=>({k:"s"+f.id,name:f.name,per:f.serving?`per ${f.serving}`:"per serve",cal:f.cal,p:f.p,c:f.c,f:f.f,saved:f}));
+        const have=new Set(mine.map(x=>String(x.name).toLowerCase()));
+        const rec=recents.map(recItem).filter(x=>hit(String(x.name))&&!have.has(String(x.name).toLowerCase())).slice(0,6);
         const db=(await afcdLoad()).filter(x=>hit(x[0])).sort((a,b)=>a[0].length-b[0].length).slice(0,20).map((x,i)=>({k:"a"+i+x[0].length,name:x[0],per:"per 100g",cal:x[1],p:x[2],c:x[3],f:x[4],...(x.length>5?{fib:x[5],sug:x[6],sat:x[7],na:x[8]}:{}),g100:true}));
-        const all=[...mine,...db];draw.all=all;
-        out.innerHTML=all.length?`<div class="card" style="padding:4px 16px"><div class="list">${all.map(x=>`<div class="li" style="flex-wrap:wrap"><button class="open" data-fk="${x.k}"><div>${esc(x.name)}${x.saved?' <span class="pill">Saved</span>':""}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)} ${esc(x.per)}</div></button>${open===x.k?`<div class="ex" style="width:100%;padding-bottom:12px"><div id="famt" class="ex"></div><button class="btn wide" id="fadd">Add to ${meal}</button></div>`:""}</div>`).join("")}</div></div>`:`<div class="empty">No match. Try fewer words, or use Scan or Describe.</div>`;
+        const br=brands&&brandQ===v?brands.map((x,i)=>({k:"b"+i,name:x.name,per:`per ${x.sv}`,cal:x.cal,p:x.p,c:x.c,f:x.f,...xn(x),bbase:x,brand:true})):[];
+        const all=[...rec,...mine,...db,...br];draw.all=all;
+        out.innerHTML=(all.length?listHtml(all):`<div class="empty">No match in your foods or the FSANZ database.</div>`)+
+          (brandQ===v&&brands?(brands.length?"":`<div class="small muted" style="margin-top:8px">No packaged products found for "${esc(v)}".</div>`):`<button class="btn sec wide" id="fqb" style="margin-top:10px" ${brandBusy?"disabled":""}>${brandBusy?"Searching brands…":`Search brands for "${esc(q.value.trim())}"`}</button>`);
+        bind(all);
+        const fb=out.querySelector("#fqb");if(fb)fb.onclick=async()=>{brandBusy=true;draw();try{brands=await offSearch(v);brandQ=v}catch(e){brands=null;brandQ="";toast("Couldn't reach the brands database. Try again")}brandBusy=false;draw()}};
+      const listHtml=all=>`<div class="card" style="padding:4px 16px"><div class="list">${all.map(x=>`<div class="li" style="flex-wrap:wrap"><button class="open" data-fk="${x.k}"><div>${esc(x.name)}${x.saved?' <span class="pill">Saved</span>':x.recent?' <span class="pill">Recent</span>':x.brand?' <span class="pill">Brand</span>':""}</div><div class="small muted num">${r0(x.cal)} cal · P ${r1(x.p)} · C ${r1(x.c)} · F ${r1(x.f)} ${esc(x.per)}</div></button>${open===x.k?`<div class="ex" style="width:100%;padding-bottom:12px"><div id="famt" class="ex"></div><button class="btn wide" id="fadd">Add to ${meal}</button></div>`:""}</div>`).join("")}</div></div>`;
+      const bind=all=>{
         out.querySelectorAll("[data-fk]").forEach(b=>b.onclick=()=>{open=open===b.dataset.fk?null:b.dataset.fk;draw()});
-        const fa=out.querySelector("#fadd");if(fa){const x=all.find(y=>y.k===open),base=x.saved?savedBase(x.saved):{name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f,...xn(x),g:100,sv:"100g"},get=amountUI(out.querySelector("#famt"),base);
-          fa.onclick=()=>{const a=get();if(!(a.n>0)){toast("Enter an amount");return}addItems([amtItem(base,a)],false);if(x.saved)write("foods/"+x.saved.id,r=>r.update({used:Date.now()}))}}};
-      let t=null;q.oninput=()=>{clearTimeout(t);open=null;t=setTimeout(draw,150)};setTimeout(()=>q.focus(),50)}
+        const fa=out.querySelector("#fadd");if(!fa)return;
+        const x=all.find(y=>y.k===open);if(!x)return;
+        const base=x.rbase?x.rbase:x.bbase?x.bbase:x.saved?savedBase(x.saved):{name:x.name,cal:x.cal,p:x.p,c:x.c,f:x.f,...xn(x),g:100,sv:"100g"};
+        const init=x.ramt?{...x.ramt}:x.bbase&&x.bbase.servingG?{n:x.bbase.servingG,u:"g"}:undefined;
+        const get=amountUI(out.querySelector("#famt"),base,init);
+        fa.onclick=()=>{const a=get();if(!(a.n>0)){toast("Enter an amount");return}addItems([amtItem(base,a)],false);if(x.saved)write("foods/"+x.saved.id,r=>r.update({used:Date.now()}))}};
+      let t=null;q.oninput=()=>{clearTimeout(t);open=null;t=setTimeout(draw,150)};q.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();q.blur()}};draw();setTimeout(()=>q.focus(),50)}
     if(mode==="describe"){body.innerHTML=`<label class="f" for="fd">What did you eat?<textarea class="i" id="fd" placeholder="e.g. 200g chicken breast, 1 cup basmati rice, steamed broccoli"></textarea></label><button class="btn wide" id="go">Estimate</button><div id="res"></div>`;
       body.querySelector("#go").onclick=()=>estimate(body.querySelector("#fd").value.trim(),null)}
     if(mode==="photo"){body.innerHTML=`<label class="f" for="fp">Photo of the meal or the nutrition label<input class="i" type="file" id="fp" accept="image/jpeg,image/png,image/webp"></label><label class="f" for="fn">Anything the photo won't show (optional)<input class="i" id="fn" placeholder="e.g. cooked in 1 tbsp olive oil, about 300g"></label><button class="btn wide" id="go">Estimate from photo</button><div id="res"></div>`;
@@ -618,12 +633,41 @@ function editDist(a,b){if(Math.abs(a.length-b.length)>2)return 9;const d=Array.f
 function foodMatch(name,words){
   const l=name.toLowerCase(),toks=l.split(/[^a-z0-9]+/).filter(Boolean);
   return words.every(w=>{
+    if(w.length<4)return toks.some(t=>t.startsWith(w));
     if(l.includes(w))return true;
     const stem=w.length>4?w.replace(/(es|s)$/,""):w;if(stem!==w&&l.includes(stem))return true;
     if(w.length<5)return false;
     const tol=w.length>=8?2:1;
     return toks.some(t=>editDist(w,t.slice(0,w.length))<=tol||editDist(w,t)<=tol);
   });
+}
+function entryBase(f){
+  if(f.base)return {base:f.base,amt:f.amt?{...f.amt}:{n:1,u:"sv"}};
+  const gm=String(f.name).match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i),core={cal:+f.cal||0,p:+f.p||0,c:+f.c||0,f:+f.f||0,...xn(f)};
+  if(gm)return {base:{name:String(f.name).replace(gm[0],"").replace(/^[\s,]+|[\s,]+$/g,"").replace(/\s{2,}/g," ")||f.name,...core,g:+gm[1],sv:gm[1]+"g"},amt:{n:+gm[1],u:"g"}};
+  return {base:{name:String(f.name).replace(/\s*×\s*[\d.]+$/,""),...core,g:0,sv:"serve"},amt:{n:1,u:"sv"}};
+}
+function recentFoods(){
+  const seen=new Map(),ds=Object.keys(S.days).sort().reverse().slice(0,60);
+  for(const d of ds)for(const f of [...dayFoods(d)].reverse()){if(!f||!f.name||/^quick add$/i.test(f.name))continue;const e=entryBase(f),key=String(e.base.name).toLowerCase();if(!seen.has(key))seen.set(key,e)}
+  return [...seen.values()].slice(0,40);
+}
+function offParse(p){
+  const n=p.nutriments||{},num=v=>v==null||v===""||isNaN(+v)?null:+v;
+  const kcal=k=>{const a=num(n["energy-kcal_"+k]);if(a!=null)return a;const kj=num(n["energy-kj_"+k])??num(n["energy_"+k]);return kj!=null?kj/4.184:null};
+  const per=k=>({cal:kcal(k),p:num(n["proteins_"+k]),c:num(n["carbohydrates_"+k]),f:num(n["fat_"+k]),fib:num(n["fiber_"+k]),sug:num(n["sugars_"+k]),sat:num(n["saturated-fat_"+k]),na:num(n["sodium_"+k])!=null?num(n["sodium_"+k])*1000:null});
+  const brand=String(p.brands||"").split(",")[0].trim(),pn=String(p.product_name_en||p.product_name||"").trim();
+  const name=((brand&&pn&&!pn.toLowerCase().includes(brand.toLowerCase())?brand+" "+pn:pn||brand)+(p.quantity&&!/\d/.test(pn)?" "+p.quantity:"")).slice(0,80);
+  if(!name)return null;
+  const h=per("100g"),sv=per("serving"),sq=num(p.serving_quantity);
+  if(h.cal!=null)return {name,cal:r0(h.cal),p:r1(h.p),c:r1(h.c),f:r1(h.f),...xn(h),g:100,sv:"100g",servingG:sq||0,serving:String(p.serving_size||"").slice(0,30)};
+  if(sv.cal!=null)return {name,cal:r0(sv.cal),p:r1(sv.p),c:r1(sv.c),f:r1(sv.f),...xn(sv),g:sq||0,sv:String(p.serving_size||"serve").slice(0,30)};
+  return null;
+}
+async function offSearch(q){
+  const u=`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=15&fields=code,product_name,product_name_en,brands,quantity,serving_size,serving_quantity,nutriments&tagtype_0=countries&tag_contains_0=contains&tag_0=australia`;
+  const r=await fetch(u,{signal:AbortSignal.timeout?AbortSignal.timeout(10000):undefined});if(!r.ok)throw new Error("off "+r.status);
+  const j=await r.json();return (j.products||[]).map(offParse).filter(Boolean).slice(0,12);
 }
 let afcdP=null;function afcdLoad(){return afcdP||(afcdP=fetch("/afcd.json").then(r=>r.ok?r.json():[]).catch(()=>[]).then(a=>Array.isArray(a)?a:[]))}
 const okCode=s=>/^\d{8,14}$/.test(String(s||""));
@@ -1391,14 +1435,25 @@ function openEditFood(d,id){
   function paint(){
     b.innerHTML=`<label class="f" for="efn">Food<input class="i" id="efn" value="${esc(f.name)}"></label>
     <div class="eyebrow">Amount</div><div id="efAmt" class="ex"></div>
+    <button class="btn sec wide" id="efFix">Numbers wrong? Enter the label</button>
     <details><summary class="small muted" style="cursor:pointer;padding:6px 0">Edit the numbers directly</summary><div class="grid4">${[["cal","Cal"],["p","Protein"],["c","Carbs"],["f","Fat"]].map(([k,l])=>`<label class="f" for="ef-${k}">${l}<input class="i num" id="ef-${k}" inputmode="decimal" value="${k==="cal"?r0(f[k]):r1(f[k])}"></label>`).join("")}</div></details>
     <label class="f" for="efm">Meal<select class="i" id="efm">${MEALS.map(m=>`<option ${m===f.meal?"selected":""}>${m}</option>`).join("")}</select></label>
     <button class="btn wide" id="efSave">Save</button><button class="btn danger wide" id="efDel">Remove</button>`;
     const rd=()=>{f.name=b.querySelector("#efn").value.trim()||f.name;["cal","p","c","f"].forEach(k=>f[k]=k==="cal"?r0(b.querySelector("#ef-"+k).value):r1(b.querySelector("#ef-"+k).value));f.meal=b.querySelector("#efm").value};
-    {const gm=f.base?null:String(f.name).match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i);
-     const base=f.base||(gm?{name:String(f.name).replace(gm[0],"").replace(/^[\s,]+|[\s,]+$/g,"").replace(/\s{2,}/g," ")||f.name,cal:f.cal,p:f.p,c:f.c,f:f.f,...xn(f),g:+gm[1],sv:gm[1]+"g"}:{name:f.name,cal:f.cal,p:f.p,c:f.c,f:f.f,...xn(f),g:0,sv:"serve"});
-     const tracked=!!(f.base||gm);
-     amountUI(b.querySelector("#efAmt"),base,f.amt?{...f.amt}:gm?{n:+gm[1],u:"g"}:{n:1,u:"sv"},a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=k==="cal"?r0(it[k]):r1(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});Object.assign(f,xn(it));if(tracked){f.name=it.name;f.base=it.base;f.amt={...a};b.querySelector("#efn").value=f.name}})}
+    {const eb=entryBase(f),base=eb.base,tracked=!!(f.base||base.g);
+     const getA=amountUI(b.querySelector("#efAmt"),base,eb.amt,a=>{const it=amtItem(base,a);["cal","p","c","f"].forEach(k=>{f[k]=k==="cal"?r0(it[k]):r1(it[k]);const el=b.querySelector("#ef-"+k);if(el)el.value=f[k]});Object.assign(f,xn(it));if(tracked){f.name=it.name;f.base=it.base;f.amt={...a};b.querySelector("#efn").value=f.name}});
+     const fx=b.querySelector("#efFix");fx.onclick=()=>{const a=getA(),gNow=a.u==="g"?a.n:base.g?r0(a.n*base.g):"";
+       fx.outerHTML=`<div class="card ex" id="efFixBox"><div class="eyebrow">Fix the numbers for ${esc(base.name)}</div><div class="small muted">Copy the per 100g column from the label, or the product page on the Woolies or Coles website for deli items. Kilo Coach remembers it, so next time it's in Search with the right numbers.</div>
+       <div class="grid2"><label class="f" for="fxkj">Energy kJ<input class="i num" id="fxkj" inputmode="decimal"></label><label class="f" for="fxcal">or Calories<input class="i num" id="fxcal" inputmode="decimal"></label></div>
+       <div class="grid4">${[["fxp","Protein"],["fxc","Carbs"],["fxf","Fat"],["fxfib","Fibre"]].map(([i,l])=>`<label class="f" for="${i}">${l}<input class="i num" id="${i}" inputmode="decimal"></label>`).join("")}</div>
+       <label class="f" for="fxg">Grams you ate<input class="i num" id="fxg" inputmode="decimal" value="${gNow}"></label><button class="btn wide" id="fxGo">Apply and remember</button></div>`;
+       b.querySelector("#fxGo").onclick=()=>{const v=id=>b.querySelector("#"+id).value.trim(),kj=+v("fxkj"),cal=+v("fxcal")||(kj?kj/4.184:0),g=+v("fxg");
+         if(!cal){toast("Enter the energy (kJ or calories) per 100g");return}if(!(g>0)){toast("Enter the grams you ate");return}
+         const nb={name:base.name,cal:r0(cal),p:r1(v("fxp")),c:r1(v("fxc")),f:r1(v("fxf")),...(v("fxfib")!==""?{fib:r1(v("fxfib"))}:{}),g:100,sv:"100g"};
+         const it=amtItem(nb,{n:g,u:"g"});Object.assign(f,{name:it.name,cal:r0(it.cal),p:r1(it.p),c:r1(it.c),f:r1(it.f),...xn(it),base:it.base,amt:{n:g,u:"g"}});
+         const doc={name:nb.name,serving:"100g",cal:nb.cal,p:nb.p,c:nb.c,f:nb.f,...xn(nb),used:Date.now()},ex=S.foods.find(x=>String(x.name).toLowerCase()===nb.name.toLowerCase()),sid=ex?ex.id:uid();
+         if(ex)Object.assign(ex,doc);else S.foods.unshift({id:sid,...doc});write("foods/"+sid,r=>r.set(doc));
+         setDayFoods(d,dayFoods(d).map(x=>x.id===id?{...f}:x));closeSheet();toast(`Fixed. ${nb.name} is saved with the label numbers`)}}}
     b.querySelector("#efSave").onclick=()=>{rd();setDayFoods(d,dayFoods(d).map(x=>x.id===id?{...f}:x));closeSheet();toast("Updated")};
     b.querySelector("#efDel").onclick=()=>{setDayFoods(d,dayFoods(d).filter(x=>x.id!==id));closeSheet();toast("Removed")};
   }
