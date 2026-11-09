@@ -334,7 +334,12 @@ body.has-mini::after{height:calc(150px + env(safe-area-inset-bottom,0px))}
 .fd-cal b{font-size:22px;line-height:1}.fd-cal span{font-size:12px;color:var(--muted)}
 .fd-bars{display:flex;flex-direction:column;gap:6px}.fd-b .track{height:5px;margin-top:3px}
 .fd-x{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 14px}
-.meal .mmac{font-size:12.5px;color:var(--muted);padding:0 18px 10px;margin-top:-6px}
+.meal-hd{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.mtot{font-family:var(--display);font-weight:700;font-size:20px;color:var(--accent);white-space:nowrap}
+.mtot small{font-size:12px;font-family:var(--mono);color:var(--muted);font-weight:400}
+.mpills{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;margin-top:-4px}
+.mp{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:99px;background:var(--bg);border:1px solid var(--line);color:var(--muted)}
+.mp i{width:8px;height:8px;border-radius:50%;flex:none}
 .meal .addfood{all:unset;cursor:pointer;display:block;text-align:right;padding:12px 18px;color:var(--accent);font-weight:700;font-size:14px;letter-spacing:.04em}
 .goal{display:flex;flex-direction:column;gap:2px;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:12px;padding:8px 12px}
 .goal-main{font-size:16px}.goal-main b{font-size:20px;font-family:var(--display);font-weight:700}
@@ -513,7 +518,7 @@ function renderToday(){
   h+=waterCard(S.date);
   MEALS.forEach(m=>{
     const items=foods.filter(f=>f.meal===m),mt=totals(items),ym=yest.filter(f=>f.meal===m);
-    h+=`<div class="card meal"><div class="meal-h"><div class="t">${m}</div><div class="c num">${mt.cal?mt.cal+" cal":""}</div>${items.length?`<button class="chip" data-copymeal="${m}">Copy</button>`:""}</div>${items.length?`<div class="mmac num">C ${mt.c}g · F ${mt.f}g · P ${mt.p}g</div>`:""}`;
+    h+=`<div class="card meal"><div class="meal-hd"><div class="meal-h"><div class="t">${m}</div>${items.length?`<div class="mtot num">${mt.cal.toLocaleString()}<small> cal</small></div><button class="chip" data-copymeal="${m}">Copy</button>`:""}</div>${items.length?`<div class="mpills num"><span class="mp"><i style="background:var(--mc)"></i>C ${mt.c}g</span><span class="mp"><i style="background:var(--mf)"></i>F ${mt.f}g</span><span class="mp"><i style="background:var(--mp)"></i>P ${mt.p}g</span></div>`:""}</div>`;
     if(items.length)h+=`<div class="items">${items.map(f=>{const eb=f.base?{base:f.base,amt:f.amt||{n:1,u:"sv"}}:null,nm=eb?eb.base.name:f.name,amt=eb?amtLabel(eb.base,eb.amt):"";return `<div class="item"><button class="n" data-edit="${f.id}" aria-label="Edit ${esc(f.name)}"><div>${esc(nm)}</div><div class="m num">${amt?esc(amt)+" · ":""}P ${r1(f.p)} · C ${r1(f.c)} · F ${r1(f.f)}</div></button><div class="k num">${r0(f.cal)}</div><button class="x" data-del="${f.id}" aria-label="Remove ${esc(f.name)}">×</button></div>`}).join("")}</div>`;
     else if(ym.length)h+=`<button class="ghost" data-repeat="${m}">Repeat yesterday: ${esc(ym[0].name)}${ym.length>1?" + "+(ym.length-1)+" more":""}</button>`;
     h+=`<button class="addfood" data-add="${m}">+ ADD FOOD</button></div>`;
