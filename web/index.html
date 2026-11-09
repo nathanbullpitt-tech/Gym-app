@@ -368,6 +368,11 @@ body.has-mini::after{height:calc(150px + env(safe-area-inset-bottom,0px))}
 .card.ssb{border-left:4px solid var(--accent);border-top-left-radius:6px;border-top-right-radius:6px}
 .sslbl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
 .sumhero{padding:4px 0}.sumtitle{font-family:var(--display);font-weight:700;font-size:34px;text-transform:uppercase;line-height:1}
+.expick{position:fixed;inset:0;z-index:40;background:rgba(2,4,8,.6);display:flex;align-items:flex-end;justify-content:center}
+.expick-in{background:var(--bg);width:100%;max-width:600px;height:calc(100dvh - max(28px,env(safe-area-inset-top)));border-radius:26px 26px 0 0;border:1px solid var(--line);display:flex;flex-direction:column;gap:12px;padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));box-sizing:border-box}
+.exscroll{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
+.exsel{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;margin-right:10px;flex:none;font-weight:700}
+.exsel.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink,#fff)}
 .scanov{position:fixed;inset:0;z-index:2000;background:#000;display:flex;flex-direction:column}
 .scanov video{flex:1;width:100%;height:100%;object-fit:cover;min-height:0}
 .scanov .frame{position:absolute;left:8%;right:8%;top:38%;height:22%;border:3px solid var(--accent);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);pointer-events:none}
@@ -1005,6 +1010,43 @@ const setsTxt=sets=>(sets||[]).filter(s=>s.reps).map(s=>`${s.w?"warm-up ":""}${r
 const doneOn=d=>S.workouts.filter(w=>w.date===d);
 const clone=o=>JSON.parse(JSON.stringify(o));
 const blankEx=()=>({name:"",sets:[{kg:"",reps:""}]});
+/* ---------- EXERCISE CATALOGUE ---------- */
+const EXCAT=[["Barbell bench press","Chest","Barbell"],["Incline barbell bench press","Chest","Barbell"],["Decline barbell bench press","Chest","Barbell"],["Dumbbell bench press","Chest","Dumbbell"],["Incline dumbbell press","Chest","Dumbbell"],["Dumbbell fly","Chest","Dumbbell"],["Cable fly","Chest","Cable"],["Low to high cable fly","Chest","Cable"],["Pec deck","Chest","Machine"],["Chest press machine","Chest","Machine"],["Incline chest press machine","Chest","Machine"],["Smith machine bench press","Chest","Smith machine"],["Push-up","Chest","Bodyweight"],["Dip","Chest","Bodyweight"],["Overhead press","Shoulders","Barbell"],["Seated dumbbell shoulder press","Shoulders","Dumbbell"],["Arnold press","Shoulders","Dumbbell"],["Shoulder press machine","Shoulders","Machine"],["Lateral raise","Shoulders","Dumbbell"],["Cable lateral raise","Shoulders","Cable"],["Machine lateral raise","Shoulders","Machine"],["Front raise","Shoulders","Dumbbell"],["Rear delt fly","Shoulders","Dumbbell"],["Reverse pec deck","Shoulders","Machine"],["Face pull","Shoulders","Cable"],["Upright row","Shoulders","Barbell"],["Landmine press","Shoulders","Barbell"],["Pull-up","Back","Bodyweight"],["Chin-up","Back","Bodyweight"],["Assisted pull-up","Back","Machine"],["Lat pulldown","Back","Cable"],["Close grip lat pulldown","Back","Cable"],["Straight arm pulldown","Back","Cable"],["Seated cable row","Back","Cable"],["Barbell row","Back","Barbell"],["Pendlay row","Back","Barbell"],["Dumbbell row","Back","Dumbbell"],["Chest supported row","Back","Dumbbell"],["T-bar row","Back","Barbell"],["Machine row","Back","Machine"],["Deadlift","Back","Barbell"],["Rack pull","Back","Barbell"],["Back extension","Back","Bodyweight"],["Shrug","Back","Dumbbell"],["Barbell curl","Biceps","Barbell"],["EZ bar curl","Biceps","Barbell"],["Dumbbell curl","Biceps","Dumbbell"],["Hammer curl","Biceps","Dumbbell"],["Incline dumbbell curl","Biceps","Dumbbell"],["Preacher curl","Biceps","Machine"],["Cable curl","Biceps","Cable"],["Concentration curl","Biceps","Dumbbell"],["Triceps pushdown","Triceps","Cable"],["Rope pushdown","Triceps","Cable"],["Overhead cable triceps extension","Triceps","Cable"],["Skull crusher","Triceps","Barbell"],["Overhead dumbbell triceps extension","Triceps","Dumbbell"],["Close grip bench press","Triceps","Barbell"],["Triceps dip machine","Triceps","Machine"],["Bench dip","Triceps","Bodyweight"],["Wrist curl","Forearms","Dumbbell"],["Farmer's carry","Forearms","Dumbbell"],["Back squat","Quads","Barbell"],["Front squat","Quads","Barbell"],["Hack squat","Quads","Machine"],["Leg press","Quads","Machine"],["Goblet squat","Quads","Dumbbell"],["Bulgarian split squat","Quads","Dumbbell"],["Walking lunge","Quads","Dumbbell"],["Reverse lunge","Quads","Dumbbell"],["Step-up","Quads","Dumbbell"],["Leg extension","Quads","Machine"],["Smith machine squat","Quads","Smith machine"],["Pendulum squat","Quads","Machine"],["Belt squat","Quads","Machine"],["Box squat","Quads","Barbell"],["Spanish squat","Quads","Band"],["Wall sit","Quads","Bodyweight"],["Romanian deadlift","Hamstrings","Barbell"],["Dumbbell Romanian deadlift","Hamstrings","Dumbbell"],["Stiff leg deadlift","Hamstrings","Barbell"],["Lying leg curl","Hamstrings","Machine"],["Seated leg curl","Hamstrings","Machine"],["Nordic curl","Hamstrings","Bodyweight"],["Good morning","Hamstrings","Barbell"],["Hip thrust","Glutes","Barbell"],["Glute bridge","Glutes","Bodyweight"],["Hip thrust machine","Glutes","Machine"],["Cable kickback","Glutes","Cable"],["Hip abduction machine","Glutes","Machine"],["Hip adduction machine","Glutes","Machine"],["Sumo deadlift","Glutes","Barbell"],["Standing calf raise","Calves","Machine"],["Seated calf raise","Calves","Machine"],["Leg press calf raise","Calves","Machine"],["Single leg calf raise","Calves","Dumbbell"],["Tibialis raise","Calves","Bodyweight"],["Plank","Core","Bodyweight"],["Side plank","Core","Bodyweight"],["Hanging leg raise","Core","Bodyweight"],["Cable crunch","Core","Cable"],["Ab wheel rollout","Core","Bodyweight"],["Crunch","Core","Bodyweight"],["Russian twist","Core","Dumbbell"],["Pallof press","Core","Cable"],["Dead bug","Core","Bodyweight"],["Kettlebell swing","Full body","Kettlebell"],["Power clean","Full body","Barbell"],["Thruster","Full body","Barbell"],["Burpee","Full body","Bodyweight"],["Sled push","Full body","Machine"],["Battle ropes","Full body","Other"]];
+const EXMUS=["Chest","Back","Shoulders","Biceps","Triceps","Forearms","Quads","Hamstrings","Glutes","Calves","Core","Full body"];
+const EXEQ=["Barbell","Dumbbell","Cable","Machine","Smith machine","Bodyweight","Kettlebell","Band","Other"];
+function exCatalogue(){
+  const map=new Map(EXCAT.map(([n,m,e])=>[n.toLowerCase(),{name:n,mus:m,eq:e,custom:false}]));
+  (S.settings.customEx||[]).forEach(x=>{if(x&&x.name&&!map.has(x.name.toLowerCase()))map.set(x.name.toLowerCase(),{name:x.name,mus:x.mus||"Other",eq:x.eq||"Other",custom:true})});
+  [...S.workouts,...S.templates].forEach(w=>(w.exercises||[]).forEach(e=>{const n=(e.name||"").trim();if(n&&!map.has(n.toLowerCase()))map.set(n.toLowerCase(),{name:n,mus:"Other",eq:"Other",custom:true})}));
+  const used={};S.workouts.forEach(w=>(w.exercises||[]).forEach(e=>{const k=(e.name||"").trim().toLowerCase();if(k){used[k]=used[k]||{n:0,last:""};used[k].n++;if(w.date>used[k].last)used[k].last=w.date}}));
+  return [...map.values()].map(x=>({...x,used:used[x.name.toLowerCase()]||null}));
+}
+/* Picker overlay used inside the workout and routine editor (multi-select). Also a browse view on the Train tab. */
+function exListHtml(list,sel,pick){
+  return list.length?`<div class="card flist">${list.map(x=>`<div class="frow"><button class="fopen" data-exn="${esc(x.name)}"><div class="fn">${esc(x.name)}</div><div class="small muted">${esc(x.mus)} · ${esc(x.eq)}${x.used?` · done ${x.used.n}×`:""}${x.custom?" · yours":""}</div></button>${pick?`<span class="exsel ${sel.has(x.name)?"on":""}" aria-hidden="true">${sel.has(x.name)?"✓":""}</span>`:`<span class="muted" aria-hidden="true">›</span>`}</div>`).join("")}</div>`:`<div class="empty">No exercises match.</div>`;
+}
+function exFilterBar(st){return `<div class="fsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="exq" type="search" placeholder="Search exercises" aria-label="Search exercises" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="${esc(st.q)}"></div>
+  <div class="row" style="gap:8px"><select class="i" id="exMus" aria-label="Muscle"><option value="">All muscles</option>${EXMUS.map(m=>`<option ${st.mus===m?"selected":""}>${m}</option>`).join("")}<option ${st.mus==="Other"?"selected":""}>Other</option></select><select class="i" id="exEq" aria-label="Equipment"><option value="">All equipment</option>${EXEQ.map(m=>`<option ${st.eq===m?"selected":""}>${m}</option>`).join("")}</select></div>`}
+function exFiltered(st){const words=st.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let l=exCatalogue().filter(x=>(!st.mus||x.mus===st.mus)&&(!st.eq||x.eq===st.eq)&&(!words.length||foodMatch(x.name,words)));
+  return l.sort((a,b)=>(b.used?b.used.n:0)-(a.used?a.used.n:0)||a.name.localeCompare(b.name))}
+function openExPicker(onPick){
+  const ov=document.createElement("div");ov.className="expick";ov.setAttribute("role","dialog");ov.setAttribute("aria-label","Add exercises");
+  const st={q:"",mus:"",eq:""},sel=new Set();document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  const paint=()=>{const list=exFiltered(st);
+    ov.innerHTML=`<div class="expick-in"><div class="sheet-h"><h2>Add exercises</h2><button class="iconbtn" id="exX" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>${exFilterBar(st)}<div id="exList" class="exscroll">${exListHtml(list,sel,true)}${st.q.trim()&&!list.some(x=>x.name.toLowerCase()===st.q.trim().toLowerCase())?`<button class="btn sec wide" id="exNew" style="margin-top:10px">Create "${esc(st.q.trim())}"</button>`:""}</div>
+      <button class="btn wide" id="exAdd" ${sel.size?"":"disabled"}>${sel.size?`Add ${sel.size} exercise${sel.size>1?"s":""}`:"Select exercises"}</button></div>`;
+    ov.querySelector("#exX").onclick=close;
+    const q=ov.querySelector("#exq");q.oninput=()=>{st.q=q.value;const l=exFiltered(st);ov.querySelector("#exList").innerHTML=exListHtml(l,sel,true)+(st.q.trim()&&!l.some(x=>x.name.toLowerCase()===st.q.trim().toLowerCase())?`<button class="btn sec wide" id="exNew" style="margin-top:10px">Create "${esc(st.q.trim())}"</button>`:"");bindList()};
+    ov.querySelector("#exMus").onchange=e=>{st.mus=e.target.value;paint()};ov.querySelector("#exEq").onchange=e=>{st.eq=e.target.value;paint()};
+    ov.querySelector("#exAdd").onclick=()=>{if(!sel.size)return;onPick([...sel]);close()};
+    bindList();
+  };
+  const bindList=()=>{ov.querySelectorAll("[data-exn]").forEach(b=>b.onclick=()=>{const n=b.dataset.exn;sel.has(n)?sel.delete(n):sel.add(n);const mk=b.parentElement.querySelector(".exsel");if(mk){mk.classList.toggle("on",sel.has(n));mk.textContent=sel.has(n)?"✓":""}const a=ov.querySelector("#exAdd");a.disabled=!sel.size;a.textContent=sel.size?`Add ${sel.size} exercise${sel.size>1?"s":""}`:"Select exercises"});
+    const nb=ov.querySelector("#exNew");if(nb)nb.onclick=()=>{const n=st.q.trim().slice(0,60);const cx=[...(S.settings.customEx||[]),{name:n,mus:st.mus||"Other",eq:st.eq||"Other"}],ns={...S.settings,customEx:cx};S.settings=ns;write("settings/main",r=>r.set(ns));sel.add(n);st.q="";paint();toast(`Created ${n}`)}};
+  paint();setTimeout(()=>{const q=ov.querySelector("#exq");q&&q.focus()},60);
+}
 /* ---------- TRAIN: Workout (routines in folders) / Calendar / History ---------- */
 const folderOf=t=>String((t&&t.program)||"").trim();
 function folderNames(){const set=new Set();(S.settings.folders||[]).forEach(f=>f&&set.add(String(f)));S.templates.forEach(t=>{const f=folderOf(t);if(f)set.add(f)});if(S.program&&S.program.name&&S.templates.some(t=>folderOf(t)===S.program.name)){set.delete(S.program.name);return [S.program.name,...[...set].sort()]}return [...set].sort()}
@@ -1020,10 +1062,19 @@ function folderCard(name,items,isLoose){
 }
 function renderTrain(){
   let tv=S.trainView||"workout";if(tv==="today"||tv==="library")tv="workout";
-  const tseg=`<div class="seg">${[["workout","Workout"],["calendar","Calendar"],["history","History"]].map(([k,l])=>`<button data-tv="${k}" aria-pressed="${tv===k}">${l}</button>`).join("")}</div>`;
+  const tseg=`<div class="seg">${[["workout","Workout"],["calendar","Calendar"],["history","History"],["exercises","Exercises"]].map(([k,l])=>`<button data-tv="${k}" aria-pressed="${tv===k}">${l}</button>`).join("")}</div>`;
   const bindTV=()=>$("#p-train").querySelectorAll("[data-tv]").forEach(b=>b.onclick=()=>{S.trainView=b.dataset.tv;render();window.scrollTo(0,0)});
   if(tv==="calendar"){renderPlan($("#p-train"),tseg);bindTV();return}
   const t=today(),pl=S.plan[t],done=doneOn(t).length>0,p=$("#p-train");let h=tseg;
+  if(tv==="exercises"){
+    const st=S.exState||(S.exState={q:"",mus:"",eq:""});
+    h+=exFilterBar(st)+`<div id="exList">${exListHtml(exFiltered(st),new Set(),false)}</div><div class="small muted">Tap an exercise for your history, best lifts and progress chart. Anything you've typed in a workout is here too.</div>`;
+    p.innerHTML=h;bindTV();
+    const bind=()=>p.querySelectorAll("[data-exn]").forEach(b=>b.onclick=()=>openLift(b.dataset.exn));
+    const q=p.querySelector("#exq");q.oninput=()=>{st.q=q.value;p.querySelector("#exList").innerHTML=exListHtml(exFiltered(st),new Set(),false);bind()};
+    p.querySelector("#exMus").onchange=e=>{st.mus=e.target.value;render()};p.querySelector("#exEq").onchange=e=>{st.eq=e.target.value;render()};
+    bind();return;
+  }
   if(tv==="history"){
     const recent=S.workouts.filter(w=>w.date>=addDays(t,-6));
     h+=`<div class="card stats"><div class="stat"><div class="v num">${recent.length}</div><div class="l">Sessions, 7 days</div></div><div class="stat"><div class="v num">${Math.round(recent.reduce((a,w)=>a+vol(w),0)/100)/10}t</div><div class="l">Volume, 7 days</div></div><div class="stat"><div class="v num">${r1(recent.filter(isCardio).reduce((a,w)=>a+(+(w.cardio||{}).km||0),0))}</div><div class="l">Cardio km, 7 days</div></div></div>`;
@@ -1224,7 +1275,7 @@ function openWorkout(w,isNew,kind){
     {const ft=w0.querySelector("#wFinTop");if(ft)ft.onclick=()=>{const b=wb.querySelector("#wSave");if(b)b.click();else wb.querySelector("[data-fin]")&&wb.querySelector("[data-fin]").scrollIntoView({block:"center"})}}
     wb.querySelectorAll("[data-rmset]").forEach(b=>b.onclick=()=>{const[a,c]=b.dataset.rmset.split("-");w.exercises[a].sets.splice(c,1);paint()});
     wb.querySelectorAll("[data-rmex]").forEach(b=>b.onclick=()=>{w.exercises.splice(+b.dataset.rmex,1);paint()});
-    wb.querySelector("#addEx").onclick=()=>{w.exercises.push(blankEx());paint();const l=wb.querySelector(`#en-${w.exercises.length-1}`);l&&l.focus()};
+    wb.querySelector("#addEx").onclick=()=>openExPicker(names=>{w.exercises=w.exercises.filter(e=>(e.name||"").trim()||e.sets.some(x=>x.kg!==""||x.reps!==""));names.forEach(n=>{const lt=!tpl&&lastTime(n,w.id),ws=lt&&lt.sets?lt.sets.filter(x=>!x.w):[];w.exercises.push({name:n,sets:(ws.length?ws:[{kg:"",reps:""},{kg:"",reps:""},{kg:"",reps:""}]).map(x=>({kg:x.kg??"",reps:tpl?(x.reps??""):""}))})});paint();if(live)saveActive()});
     const sv=wb.querySelector("#wSave");if(sv)sv.onclick=()=>{
       if(live){const st=liveStats(w);if(st.d>0&&st.d<st.n){finishAsk=true;paint();const c=wb.querySelector("[data-fin]");c&&c.scrollIntoView({block:"center"});return}}
       doSave(false)};
