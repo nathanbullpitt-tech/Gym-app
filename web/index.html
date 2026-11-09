@@ -308,6 +308,8 @@ body.has-mini::after{height:calc(150px + env(safe-area-inset-bottom,0px))}
 .mealsel{all:unset;font-family:var(--display);font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;padding-right:22px;background:no-repeat right center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238792a4' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
 .sheet-h .mealsel{margin-right:auto}
 #fdAmt .amtmac{display:none}
+.sheet.full{height:92%;height:calc(100dvh - max(28px,env(safe-area-inset-top)));overscroll-behavior:contain}
+.fstick{position:sticky;top:0;z-index:3;background:var(--bg);display:flex;flex-direction:column;gap:12px;margin-top:-12px;padding:12px 0 8px}
 .fsearch{display:flex;align-items:center;gap:8px;background:var(--sunk);border:1px solid var(--line);border-radius:14px;padding:0 6px 0 12px;min-height:50px}
 .fsearch svg{width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:2.2;stroke-linecap:round;flex:none}
 .fsearch input{all:unset;flex:1;min-width:0;font-size:17px;color:var(--ink);padding:12px 0}
@@ -316,7 +318,7 @@ body.has-mini::after{height:calc(150px + env(safe-area-inset-bottom,0px))}
 .ftabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:10px;overflow-x:auto}
 .ftabs button{all:unset;cursor:pointer;padding:10px 12px;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
 .ftabs button[aria-selected="true"]{color:var(--ink);border-color:var(--accent);font-weight:700}
-.chips.fact{margin:10px 0 2px}
+.chips.fact{margin:0}
 .fsec{font-family:var(--mono,monospace);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:14px 2px 6px}
 .flist{padding:0 4px 0 14px}
 .frow{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}.frow:last-child{border-bottom:0}
@@ -535,9 +537,9 @@ function renderToday(){
 }
 
 let onSheetClose=null;
-function sheet(html){
+function sheet(html,cls){
   {const f=onSheetClose;onSheetClose=null;if(f)f()}
-  const host=$("#sheetHost");host.innerHTML=`<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true"><div class="wrap">${html}</div></div></div>`;
+  const host=$("#sheetHost");host.innerHTML=`<div class="scrim" id="scrim"><div class="sheet${cls?" "+cls:""}" role="dialog" aria-modal="true"><div class="wrap">${html}</div></div></div>`;
   $("#scrim").onclick=e=>{if(e.target.id==="scrim")closeSheet()};
   host.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheet);
   return host.querySelector(".sheet .wrap");
@@ -550,15 +552,15 @@ function sampleErr(e){const c=e&&e.code;return c==="not_granted"||c==="sampling_
 
 function openAddFood(meal){
   let mode="search",est=[],filt="all",searchQ="",added=new Set();
-  const w=sheet(`<div class="sheet-h"><select class="mealsel" id="mealSel" aria-label="Meal">${MEALS.map(m=>`<option ${m===meal?"selected":""}>${m}</option>`).join("")}</select>${closeBtn}</div>
-  <div id="fTop"></div><div id="body" class="ex"></div>`);
+  const w=sheet(`<div class="fstick"><div class="sheet-h"><select class="mealsel" id="mealSel" aria-label="Meal">${MEALS.map(m=>`<option ${m===meal?"selected":""}>${m}</option>`).join("")}</select>${closeBtn}</div>
+  <div id="fTop"></div></div><div id="body" class="ex"></div>`,"full");
   const body=w.querySelector("#body"),top=w.querySelector("#fTop");
   w.querySelector("#mealSel").onchange=e=>{meal=e.target.value};
   const ACTIONS=[["scan","Scan barcode"],sample&&["describe","Describe it"],sample&&["photo","Photo"],["quick","Quick add"],["manual","Create food"],["saved","Meals and recipes"]].filter(Boolean);
   function paintTop(){
     if(mode==="search"){top.innerHTML=`<div class="fsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="fq" type="search" placeholder="Search for a food" aria-label="Search foods" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" value="${esc(searchQ)}"><button class="fscan" id="fScan" aria-label="Scan a barcode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 8v8M11 8v8M14 8v8M17 8v8"/></svg></button></div>
       <div class="ftabs" role="tablist">${[["all","All"],["mine","My foods"],["meals","Meals"],["recipes","Recipes"]].map(([k,l])=>`<button role="tab" data-ft="${k}" aria-selected="${filt===k}">${l}</button>`).join("")}</div>
-      <div class="chips fact">${ACTIONS.filter(a=>a[0]!=="scan").map(([k,l])=>`<button class="chip" data-m="${k}">${l}</button>`).join("")}</div>`;
+`;
       top.querySelector("#fScan").onclick=()=>{mode="scan";paint()};
       top.querySelectorAll("[data-ft]").forEach(b=>b.onclick=()=>{filt=b.dataset.ft;paint()});
     }else top.innerHTML=`<button class="backlnk" id="fBack">‹ Back to search</button><div class="eyebrow" style="margin-top:4px">${esc((ACTIONS.find(a=>a[0]===mode)||["","Add food"])[1])}</div>`;
@@ -567,7 +569,8 @@ function openAddFood(meal){
   }
   function paint(){
     paintTop();
-    if(mode==="search"){body.innerHTML=`<div id="fqr"></div>`;
+    if(mode==="search"){body.innerHTML=`<div class="chips fact">${ACTIONS.filter(a=>a[0]!=="scan").map(([k,l])=>`<button class="chip" data-m="${k}">${l}</button>`).join("")}</div><div id="fqr"></div>`;
+      body.querySelectorAll(".fact [data-m]").forEach(b2=>b2.onclick=()=>{mode=b2.dataset.m;paint()});
       const q=top.querySelector("#fq"),out=body.querySelector("#fqr");let brands=null,brandQ="",brandBusy=false;
       const recItem=(e,i)=>{const it=amtItem(e.base,e.amt);return {k:"r"+i,name:e.base.name,sub:amtLabel(e.base,e.amt),cal:it.cal,p:it.p,c:it.c,f:it.f,base:e.base,amt:e.amt,tag:"recent"}};
       const savedItem=f=>{const bs=savedBase(f),am=bs.g&&bs.sv==="100g"?{n:100,u:"g"}:{n:1,u:"sv"},it=amtItem(bs,am);return {k:"s"+f.id,name:f.name,sub:amtLabel(bs,am),cal:it.cal,p:it.p,c:it.c,f:it.f,base:bs,amt:am,saved:f,tag:"saved"}};
