@@ -13,6 +13,7 @@ This project is separate from Blunderbust (the chess app, Netlify project `state
 | Data API | `netlify/functions/data.mts` (`/api/data`) | Reads and writes the signed-in user's documents in Netlify Database. |
 | AI | `netlify/functions/ai.mts` (`/api/ai`) | Calls Claude through the Netlify AI Gateway and streams the reply. Tools run in the browser. |
 | Photos | `netlify/functions/photo.mts` (`/api/photo`) | Progress photos in Netlify Blobs, private per user. |
+| AI usage | `netlify/functions/usage.mts` (`/api/usage`) | Monthly AI requests and an estimated credit cost, logged per user by `ai.mts` into `ai_usage`. Shown in Settings. |
 | Sharing | `netlify/functions/share.mts` (`/api/share`) | Share links for saved workouts or a whole plan. Exercises, sets and reps only, no weights or stats. |
 | Schema | `netlify/database/migrations/` | `docs` (one row per user document) and `shares`. |
 

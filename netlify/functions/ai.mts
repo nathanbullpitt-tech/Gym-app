@@ -1,6 +1,16 @@
 import type { Config } from "@netlify/functions"
 import Anthropic from "@anthropic-ai/sdk"
 import { requireUser } from "../lib/auth.mts"
+import { getDatabase } from "@netlify/database"
+
+const db = getDatabase()
+async function logUsage(userId: string, model: string, inTok: number, outTok: number) {
+  const month = new Date().toISOString().slice(0, 7)
+  try {
+    await db.sql`INSERT INTO ai_usage (user_id, month, model, calls, input_tokens, output_tokens) VALUES (${userId}, ${month}, ${model}, 1, ${inTok}, ${outTok})
+      ON CONFLICT (user_id, month, model) DO UPDATE SET calls = ai_usage.calls + 1, input_tokens = ai_usage.input_tokens + EXCLUDED.input_tokens, output_tokens = ai_usage.output_tokens + EXCLUDED.output_tokens`
+  } catch (e) { console.error("usage log failed", String(e)) }
+}
 
 // Model choice: env override first, then whatever the AI Gateway currently lists, then sensible fallbacks.
 const FALLBACK = { main: ["claude-sonnet-5-5", "claude-sonnet-4-5"], quick: ["claude-haiku-5-5", "claude-haiku-4-5"] }
@@ -92,9 +102,13 @@ export default async (req: Request) => {
       const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"))
       const blocks: any[] = []
       let stop: string | null = null
+      let inTok = 0, outTok = 0
       try {
         for await (const ev of stream!) {
-          if (ev.type === "content_block_start") {
+          if (ev.type === "message_start") {
+            const u: any = (ev as any).message?.usage || {}
+            inTok = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0)
+          } else if (ev.type === "content_block_start") {
             const b: any = { ...ev.content_block }
             if (b.type === "tool_use") b._json = ""
             blocks[ev.index] = b
@@ -104,6 +118,7 @@ export default async (req: Request) => {
             else if (ev.delta.type === "input_json_delta") b._json += ev.delta.partial_json
           } else if (ev.type === "message_delta") {
             stop = ev.delta.stop_reason || stop
+            outTok = (ev as any).usage?.output_tokens || outTok
           }
         }
         const content = blocks.filter(Boolean).map(b => {
@@ -116,6 +131,7 @@ export default async (req: Request) => {
           return null
         }).filter(Boolean)
         send({ t: "done", content, stop_reason: stop, model })
+        await logUsage(me.id, model, inTok, outTok)
       } catch (e: any) {
         console.error("ai stream error", String(e?.message || e))
         send({ t: "error", error: e?.status === 429 ? "rate_limited" : "upstream", message: String(e?.message || e) })
