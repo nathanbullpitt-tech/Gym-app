@@ -358,6 +358,11 @@ body.has-mini::after{height:calc(150px + env(safe-area-inset-bottom,0px))}
 .wkd.done .wkc{background:var(--good);border-color:var(--good);color:#04140c}
 .wkd.today:not(.done) .wkc{border-color:var(--accent)}
 .wkd.fut .wkc{border-style:dashed;opacity:.5}
+.wkd:not(.done) .wkc{font-size:12px;font-family:var(--mono);color:var(--muted)}
+.wkd.sel .wkc{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.wkd.sel .wkl{color:var(--accent);font-weight:700}
+.wknav{all:unset;cursor:pointer;width:18px;text-align:center;font-size:22px;line-height:1;color:var(--muted)}
+.wkstrip{gap:6px}
 .wkstreak{display:flex;flex-direction:column;align-items:center;padding-left:10px;border-left:1px solid var(--line);min-width:48px}
 .wkstreak b{font-family:var(--display);font-size:24px;line-height:1;color:var(--warn)}
 .wkstreak span{font-size:11px;color:var(--muted);font-family:var(--mono)}
@@ -512,7 +517,7 @@ async function checkShare(){
 function banner(m){const b=$("#banner");b.textContent=m;b.hidden=false}
 
 /* ---------- tabs ---------- */
-document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render();if(S.tab==="coach")coachToBottom();else window.scrollTo(0,0)});
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="home")S.homeDay=null;S.tab=b.dataset.tab;render();if(S.tab==="coach")coachToBottom();else window.scrollTo(0,0)});
 function coachToBottom(){const go=()=>window.scrollTo(0,document.documentElement.scrollHeight);go();requestAnimationFrame(go);setTimeout(go,120)}
 $("#btnSettings").onclick=openSettings;
 
@@ -1676,40 +1681,45 @@ function renderHome(){
   if(online&&!S.loadedSettings){p.dataset.ob="";p.innerHTML=`<div class="empty">Loading…</div>`;return}
   if(!S.settings.onboarded||S.forceOb){if(!S.ob)S.ob={step:"name",d:obDefaults()};if(p.dataset.ob===S.ob.step)return;renderOnboarding(p);return}
   p.dataset.ob="";
-  const t=today(),st=S.settings,c=checks(t),tt=totals(dayFoods(t)),left=st.cal-tt.cal,pl2=Math.max(0,r1(st.p-tt.p)),hr=new Date().getHours();
+  const T=today();if(!S.homeDay||S.homeDay>T)S.homeDay=T;
+  const t=S.homeDay,isT=t===T,st=S.settings,c=checks(t),tt=totals(dayFoods(t)),left=st.cal-tt.cal,pl2=Math.max(0,r1(st.p-tt.p)),hr=new Date().getHours();
   const hi=hr<12?"Morning":hr<17?"Afternoon":"Evening",nm=st.name?", "+esc(String(st.name).split(" ")[0]):"",sk=streak();
   const items=[c.weigh,c.food,c.train,...habitsOn().map(([k])=>habitOk(t,k))],n=items.filter(Boolean).length,tot=items.length;
   const tick=ok=>`<span class="tk ${ok?"on":""}" aria-hidden="true">${ok?"✓":""}</span>`;
-  const pl=S.plan[t],dw=doneOn(t),tp=pl&&S.templates.find(x=>x.id===pl.templateId),wt=S.weights[t]&&S.weights[t].kg,last=weightSeries().filter(x=>x.kg!=null).pop();
+  const pl=S.plan[t],dw=doneOn(t),tp=pl&&S.templates.find(x=>x.id===pl.templateId),wt=S.weights[t]&&S.weights[t].kg,last=weightSeries().filter(x=>x.kg!=null&&x.d<=t).pop();
   const x=expenditure(),due=!st.lastCheckIn||daysBetween(st.lastCheckIn,t)>=7,needCI=due&&x.conf>=0.2&&Math.abs(x.target-st.cal)>=50;
-  let h=`<div class="home-head"><div style="min-width:0"><div class="eyebrow">${esc(fmtDate(t,{weekday:"long",day:"numeric",month:"long"}))}</div><h2>${hi}${nm}</h2></div><span class="pill ${sk?"good":""}">${sk} day streak</span></div>`;
-  {const mon=mondayOf(t),fs=(()=>{let n=0,d=t;if(!dayComplete(d))d=addDays(d,-1);while(n<400&&dayComplete(d)){n++;d=addDays(d,-1)}return n})();
-   h+=`<div class="card wkstrip"><div class="wkdays">${[0,1,2,3,4,5,6].map(i=>{const d=addDays(mon,i),done=dayComplete(d),fut=d>t,isT=d===t;return `<button class="wkd ${done?"done":""} ${isT?"today":""} ${fut?"fut":""}" data-wkd="${d}" ${fut?"disabled":""} aria-label="${esc(fmtDate(d,{weekday:"long",day:"numeric",month:"short"}))}${done?", food logged":""}"><span class="wkl">${"MTWTFSS"[i]}</span><span class="wkc">${done?"✓":""}</span></button>`}).join("")}</div><div class="wkstreak num" title="Days in a row with food marked complete"><b>${fs}</b><span>day${fs===1?"":"s"}</span></div></div>`}
+  let h=isT?`<div class="home-head"><div style="min-width:0"><div class="eyebrow">${esc(fmtDate(t,{weekday:"long",day:"numeric",month:"long"}))}</div><h2>${hi}${nm}</h2></div><span class="pill ${sk?"good":""}">${sk} day streak</span></div>`
+    :`<div class="home-head"><div style="min-width:0"><div class="eyebrow">${daysBetween(t,T)===1?"Yesterday":daysBetween(t,T)+" days ago"}</div><h2>${esc(fmtDate(t,{weekday:"long",day:"numeric",month:"short"}))}</h2></div><button class="chip" id="hBack">Back to today</button></div>`;
+  {const mon=mondayOf(t),fs=(()=>{let n=0,d=T;if(!dayComplete(d))d=addDays(d,-1);while(n<400&&dayComplete(d)){n++;d=addDays(d,-1)}return n})();
+   h+=`<div class="card wkstrip"><button class="wknav" data-wkm="-7" aria-label="Previous week">‹</button><div class="wkdays">${[0,1,2,3,4,5,6].map(i=>{const d=addDays(mon,i),done=dayComplete(d),fut=d>T,cur=d===T,sel=d===t;return `<button class="wkd ${done?"done":""} ${cur?"today":""} ${sel?"sel":""} ${fut?"fut":""}" data-wkd="${d}" ${fut?"disabled":""} aria-pressed="${sel}" aria-label="${esc(fmtDate(d,{weekday:"long",day:"numeric",month:"short"}))}${done?", food logged":""}"><span class="wkl">${"MTWTFSS"[i]}</span><span class="wkc">${done?"✓":addDays(mon,i).slice(8).replace(/^0/,"")}</span></button>`}).join("")}</div>${addDays(mon,7)<=T?`<button class="wknav" data-wkm="7" aria-label="Next week">›</button>`:`<span class="wknav" aria-hidden="true"></span>`}<div class="wkstreak num" title="Days in a row with food marked complete"><b>${fs}</b><span>day${fs===1?"":"s"}</span></div></div>`}
   h+=`<div class="card"><div class="today-rings">${rings3([{p:tt.cal/st.cal,col:left<0?"var(--bad)":"var(--accent)"},{p:tt.p/st.p,col:"var(--mp)"},{p:n/tot,col:"var(--good)"}],132)}<div class="rl">
   <div class="ri"><span class="dot" style="background:${left<0?"var(--bad)":"var(--accent)"}"></span><span class="rv num">${Math.abs(left).toLocaleString()}</span><span class="rk">Cal ${left<0?"over":"left"}</span></div>
   <div class="ri"><span class="dot" style="background:var(--mp)"></span><span class="rv num">${pl2}g</span><span class="rk">Protein to go</span></div>
-  <div class="ri"><span class="dot" style="background:var(--good)"></span><span class="rv num">${n}/${tot}</span><span class="rk">Done today</span></div></div></div></div>`;
-  h+=`<div class="eyebrow" style="margin-top:4px">Your day</div>`;
+  <div class="ri"><span class="dot" style="background:var(--good)"></span><span class="rv num">${n}/${tot}</span><span class="rk">Done ${isT?"today":"that day"}</span></div></div></div></div>`;
+  h+=`<div class="eyebrow" style="margin-top:4px">${isT?"Your day":"That day"}</div>`;
   h+=`<div class="card task">${tick(c.weigh)}<div class="grow"><div class="tt">Weigh in</div>${wt?`<div class="small muted num">${r1(wt)} kg${last?` · trend ${r1(last.avg)} kg`:""}</div>`:`<div class="small muted">First thing, after the bathroom, before food.</div><div class="row" style="margin-top:10px"><input class="i num" id="hKg" inputmode="decimal" placeholder="${last?r1(last.kg):"kg"}" aria-label="Weight in kg"><button class="btn" id="hKgGo">Save</button></div>`}</div></div>`;
   const trSub=dw.length?(isCardio(dw[0])?esc(cardioTxt(dw[0])):`${(dw[0].exercises||[]).length} exercises · ${Math.round(vol(dw[0])).toLocaleString()} kg lifted`):pl?(tp&&tp.exercises.length?esc(tp.exercises.map(e=>e.name).slice(0,4).join(", "))+(tp.exercises.length>4?" and more":""):"Planned session"):"Nothing planned. Recovery counts, so get your steps in.";
   h+=`<div class="card task">${tick(c.train)}<div class="grow"><div class="tt">${dw.length?esc(dw[0].title):pl?esc(pl.name):"Rest day"}</div><div class="small muted">${trSub}</div>${pl&&!dw.length?`<button class="btn wide" id="hStart" style="margin-top:10px">Start ${esc(pl.name)}</button>`:""}${!pl&&!dw.length?`<div class="chips" style="margin-top:10px"><button class="chip" id="hCardio">Log cardio</button><button class="chip" id="hWorkout">Start empty workout</button></div>`:""}</div></div>`;
-  h+=`<div class="card task">${tick(c.food)}<div class="grow"><div class="row between"><div class="tt">Food</div><span class="small num muted">${tt.cal.toLocaleString()} of ${Number(st.cal).toLocaleString()} cal</span></div><div class="list" style="margin-top:2px">${MEALS.map(m=>{const mc=totals(dayFoods(t).filter(f=>f.meal===m)).cal;return `<div class="li" style="padding:9px 0"><div class="grow">${m}</div><span class="small num ${mc?"":"muted"}">${mc?mc.toLocaleString()+" cal":"Not logged"}</span><button class="add" data-hadd="${m}" aria-label="Add food to ${m}">+</button></div>`}).join("")}</div><button class="btn ${c.food?"sec":""} wide" id="hFoodDone" style="margin-top:8px">${c.food?"✓ Logged for the day. Undo":"I've logged everything today"}</button></div></div>`;
+  h+=`<div class="card task">${tick(c.food)}<div class="grow"><div class="row between"><div class="tt">Food</div><span class="small num muted">${tt.cal.toLocaleString()} of ${Number(st.cal).toLocaleString()} cal</span></div><div class="list" style="margin-top:2px">${MEALS.map(m=>{const mc=totals(dayFoods(t).filter(f=>f.meal===m)).cal;return `<div class="li" style="padding:9px 0"><div class="grow">${m}</div><span class="small num ${mc?"":"muted"}">${mc?mc.toLocaleString()+" cal":"Not logged"}</span><button class="add" data-hadd="${m}" aria-label="Add food to ${m}">+</button></div>`}).join("")}</div><button class="btn ${c.food?"sec":""} wide" id="hFoodDone" style="margin-top:8px">${c.food?"✓ Logged for the day. Undo":isT?"I've logged everything today":"I logged everything that day"}</button></div></div>`;
   if(habitsOn().some(([k])=>k==="water"))h+=waterCard(t);
   habitsOn().filter(([k])=>k!=="water").forEach(([k,l,u])=>{const tg=+st.habits[k].target,v=habitVal(t,k),ok=habitOk(t,k);
-    if(k==="steps")h+=`<div class="card task">${tick(ok)}<div class="grow"><div class="row between"><div class="tt">Steps</div><span class="small muted num">Goal ${tg.toLocaleString()}</span></div>${v?`<div class="track" style="margin-top:8px"><span style="width:${Math.min(100,v/tg*100)}%;background:var(--good)"></span></div><div class="row between" style="margin-top:6px"><div class="small muted num">${v.toLocaleString()} steps${ok?"":` · ${(tg-v).toLocaleString()} to go`}</div><button class="chip" data-stepedit="1">Edit</button></div>`:`<div class="row" style="margin-top:10px;gap:8px"><input class="i num" id="hSteps" inputmode="numeric" placeholder="e.g. 9,500" aria-label="Steps today" style="flex:1"><button class="btn" id="hStepsGo">Save</button></div><div class="small muted" style="margin-top:6px">Type the number from your watch or phone. You can update it later in the day.</div>`}</div></div>`;
+    if(k==="steps")h+=`<div class="card task">${tick(ok)}<div class="grow"><div class="row between"><div class="tt">Steps</div><span class="small muted num">Goal ${tg.toLocaleString()}</span></div>${v?`<div class="track" style="margin-top:8px"><span style="width:${Math.min(100,v/tg*100)}%;background:var(--good)"></span></div><div class="row between" style="margin-top:6px"><div class="small muted num">${v.toLocaleString()} steps${ok?"":` · ${(tg-v).toLocaleString()} to go`}</div><button class="chip" data-stepedit="1">Edit</button></div>`:`<div class="row" style="margin-top:10px;gap:8px"><input class="i num" id="hSteps" inputmode="numeric" placeholder="e.g. 9,500" aria-label="Steps" style="flex:1"><button class="btn" id="hStepsGo">Save</button></div><div class="small muted" style="margin-top:6px">Type the number from your watch or phone. You can update it later in the day.</div>`}</div></div>`;
     else h+=`<div class="card task">${tick(ok)}<div class="grow"><div class="row between"><div class="tt">Sleep</div><span class="small muted num">Goal ${fmtSleep(tg)}</span></div>${v?`<div class="row between" style="margin-top:4px"><div class="small muted num">${fmtSleep(v)} last night</div><button class="chip" data-sleepedit="1">Edit</button></div>`:`<div class="row" style="margin-top:10px;gap:8px"><input class="i num" id="hSleep" inputmode="numeric" placeholder="7" aria-label="Hours slept" style="width:64px"><span class="small muted">h</span><input class="i num" id="hSleepM" inputmode="numeric" placeholder="30" aria-label="Minutes slept" style="width:64px"><span class="small muted">min</span><button class="btn" id="hSleepGo" style="margin-left:auto">Save</button></div>`}</div></div>`;
   });
-  if(needCI)h+=`<div class="card task"><span class="tk"></span><div class="grow"><div class="tt">Weekly check-in</div><div class="small muted">You're burning about ${x.est.toLocaleString()} cal a day. To stay on pace, the suggested target is ${x.target.toLocaleString()} cal.</div><button class="btn wide" id="applyT" style="margin-top:10px">Update to ${x.target.toLocaleString()} cal</button></div></div>`;
-  h+=stepCard();
-  if(sample&&!S.reviews[reviewWeek()]&&[6,0].includes(wdIndex(t)))h+=reviewCard();
-  h+=`<div class="card"><div class="eyebrow">Ask your coach</div><div class="row" style="margin-top:10px"><input class="i" id="hAsk" placeholder="e.g. What should I have for dinner?" aria-label="Message your coach"><button class="btn" id="hAskGo">Ask</button></div></div>`;
+  if(isT&&needCI)h+=`<div class="card task"><span class="tk"></span><div class="grow"><div class="tt">Weekly check-in</div><div class="small muted">You're burning about ${x.est.toLocaleString()} cal a day. To stay on pace, the suggested target is ${x.target.toLocaleString()} cal.</div><button class="btn wide" id="applyT" style="margin-top:10px">Update to ${x.target.toLocaleString()} cal</button></div></div>`;
+  if(isT){h+=stepCard();
+  if(sample&&!S.reviews[reviewWeek()]&&[6,0].includes(wdIndex(t)))h+=reviewCard();}
+  h+=isT?`<div class="card"><div class="eyebrow">Ask your coach</div><div class="row" style="margin-top:10px"><input class="i" id="hAsk" placeholder="e.g. What should I have for dinner?" aria-label="Message your coach"><button class="btn" id="hAskGo">Ask</button></div></div>`:`<button class="btn sec wide" id="hDiary" style="margin-top:4px">Open food diary for this day</button>`;
   p.innerHTML=h;
+  {const b=$("#hBack");if(b)b.onclick=()=>{S.homeDay=T;render();window.scrollTo(0,0)}}
+  {const b=$("#hDiary");if(b)b.onclick=()=>{S.date=t;S.tab="today";render();window.scrollTo(0,0)}}
+  p.querySelectorAll("[data-wkm]").forEach(b=>b.onclick=()=>{let d=addDays(t,+b.dataset.wkm);if(d>T)d=T;S.homeDay=d;render()});
   const kg=$("#hKgGo");if(kg)kg.onclick=()=>{const v=r1($("#hKg").value);if(!v||v<30||v>300){toast("Enter your weight in kg");return}S.weights[t]={kg:v};write("weights/"+t,r=>r.set({kg:v,at:Date.now()}));render();toast("Logged "+v+" kg")};
   const hs=$("#hStart");if(hs)hs.onclick=()=>startPlanned(t);
-  const hc=$("#hCardio");if(hc)hc.onclick=()=>openCardio(null,true);
+  const hc=$("#hCardio");if(hc)hc.onclick=()=>openCardio(isT?null:{id:uid(),date:t,kind:"cardio",notes:"",cardio:{type:"Run",rpe:"Moderate"}},true);
   const hw=$("#hWorkout");if(hw)hw.onclick=()=>openWorkout({id:uid(),date:t,title:"",exercises:[blankEx()]},true,"workout");
   p.querySelectorAll("[data-hadd]").forEach(b=>b.onclick=()=>{S.date=t;openAddFood(b.dataset.hadd)});
-  p.querySelectorAll("[data-wkd]").forEach(b=>b.onclick=()=>{S.date=b.dataset.wkd;S.tab="today";render();window.scrollTo(0,0)});
+  p.querySelectorAll("[data-wkd]").forEach(b=>b.onclick=()=>{S.homeDay=b.dataset.wkd;render()});
   $("#hFoodDone").onclick=()=>setComplete(t,!checks(t).food);
   p.querySelectorAll("[data-wadd]").forEach(b=>b.onclick=()=>setHabit(t,"water",Math.max(0,Math.round((habitVal(t,"water")+(+b.dataset.wadd))*100)/100)));
   p.querySelectorAll("[data-hhab]").forEach(b=>b.onclick=()=>openHabit(t,b.dataset.hhab));
@@ -1721,7 +1731,7 @@ function renderHome(){
   bindExp(p);
   const rv=p.querySelector("#rvGo");if(rv)rv.onclick=()=>genReview(rv);
   const ask=()=>{const q=$("#hAsk").value.trim();if(!q){toast("Type a question first");return}S.tab="coach";render();window.scrollTo(0,0);send(q)};
-  $("#hAskGo").onclick=ask;$("#hAsk").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();ask()}};
+  if(isT)$("#hAskGo").onclick=ask;if(isT)$("#hAsk").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();ask()}};
 }
 function reviewsList(){const ks=Object.keys(S.reviews).sort().reverse().slice(0,8);if(!ks.length)return "";return `<div class="row between"><h2 style="font-size:22px">Weekly reviews</h2></div>${ks.map(k=>`<details class="card"><summary style="cursor:pointer;font-weight:600">${esc(fmtDate(k,{day:"numeric",month:"short"}))} to ${esc(fmtDate(addDays(k,6),{day:"numeric",month:"short"}))}</summary><div style="white-space:pre-wrap;margin-top:10px">${esc(S.reviews[k].text)}</div></details>`).join("")}`}
 
