@@ -52,7 +52,8 @@ Identity doesn't run under `netlify dev`, so test sign-in on a deploy preview. L
 - Offline outbox and an offline banner.
 
 ## Keeping credit use low
-- Everything uses the cheaper Haiku model except building a training plan (Sonnet).
+- Quick estimates (describe, photo, labels, swaps) use Haiku. Coach chat, weekly reviews and plan building use Sonnet, because Haiku made arithmetic and reasoning mistakes as a coach. Settings has a "Cheaper coach" switch to put the coach back on Haiku.
+- The coach gets a KEY NUMBERS block (weight changes, averages, what's left today) worked out in code, so it never has to do sums.
 - Coach sends only the last 8 messages plus a trimmed data summary. The fixed instructions go in a cached system prompt.
 - Repeat JSON estimates (same prompt, no photo) are cached on the phone.
 - No background polling. The app syncs when it's opened or brought back to the foreground (at most once a minute).

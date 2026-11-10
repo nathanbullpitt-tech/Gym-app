@@ -913,7 +913,7 @@ function openSettings(){
   <div class="eyebrow">Theme</div>
   <div class="swatches">${TH.map(([k,l,col])=>`<button class="sw" data-thc="${k}" aria-pressed="${th.c===k}"><i style="background:${col}"></i>${l}</button>`).join("")}</div>
   <div class="seg">${[["auto","Auto"],["light","Light"],["dark","Dark"]].map(([k,l])=>`<button data-thm="${k}" aria-pressed="${(th.m||"auto")===k}">${l}</button>`).join("")}</div>
-  ${window.KC&&KC.email?`<div class="eyebrow" style="margin-top:4px">Account</div><div class="row between"><div class="small muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis">Signed in as ${esc(KC.email)}</div><button class="chip" id="sOut">Sign out</button></div><div class="card ex" id="usageCard"><div class="row between"><div style="font-weight:700">AI coach use this month</div><span class="small muted">estimate</span></div><div class="small muted" id="usageLine">Loading…</div></div>`:""}
+  ${window.KC&&KC.email?`<div class="eyebrow" style="margin-top:4px">Account</div><div class="row between"><div class="small muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis">Signed in as ${esc(KC.email)}</div><button class="chip" id="sOut">Sign out</button></div><div class="card ex" id="usageCard"><div class="row between"><div style="font-weight:700">AI coach use this month</div><span class="small muted">estimate</span></div><div class="small muted" id="usageLine">Loading…</div><label class="row between" style="margin-top:10px;gap:10px"><span><span style="font-weight:600">Cheaper coach</span><span class="small muted" style="display:block">Uses the small model for coach chat and weekly reviews. Much cheaper, but weaker at maths and reasoning.</span></span><input type="checkbox" id="coachCheap" ${S.settings.coachCheap?"checked":""}></label></div>`:""}
   <div class="eyebrow" style="margin-top:4px">Targets</div>
   <div class="grid4">${[["cal","Calories"],["p","Protein g"],["c","Carbs g"],["f","Fat g"]].map(([k,l])=>`<label class="f" for="s-${k}">${l}<input class="i num" id="s-${k}" inputmode="numeric" value="${esc(s[k])}"></label>`).join("")}</div>
   <label class="f" for="s-fib">Fibre target g a day<input class="i num" id="s-fib" inputmode="numeric" value="${esc(s.fib||"")}" placeholder="${s.sex==="f"?25:30}"></label>
@@ -930,6 +930,7 @@ function openSettings(){
   <label class="f" for="s-about">About you (the coach reads this)<textarea class="i" id="s-about">${esc(s.about)}</textarea></label>
   <button class="btn wide" id="sSave">Save</button><button class="btn sec wide" id="sRedo">Redo setup with the coach</button>`);
   w.querySelectorAll("[data-exp]").forEach(b=>b.onclick=()=>exportCsv(b.dataset.exp));
+  {const cc=w.querySelector("#coachCheap");if(cc)cc.onchange=()=>{const n={...S.settings,coachCheap:cc.checked};S.settings=n;write("settings/main",r=>r.set(n));toast(cc.checked?"Coach set to cheaper model":"Coach set to smarter model")}}
   {const ul=w.querySelector("#usageLine");if(ul)fetch("/api/usage",{credentials:"same-origin"}).then(r=>r.ok?r.json():Promise.reject()).then(u=>{const f=x=>`${x.calls} request${x.calls===1?"":"s"}, about ${x.credits.toLocaleString()} credits (US$${x.usd.toFixed(2)})`;ul.innerHTML=`<div>You: ${f(u.you)}</div>${u.everyone.calls>u.you.calls?`<div>Both accounts: ${f(u.everyone)}</div>`:""}<div style="margin-top:4px">Counts Describe, Photo, label reading, the coach and plan building. Barcode scans, search and logging are free. Check Netlify's Usage page for the exact figure.</div>`}).catch(()=>{ul.textContent="Couldn't load usage right now."})}
   {const so=w.querySelector("#sOut");if(so){let a=false;so.onclick=()=>{if(!a){a=true;so.textContent="Tap again to sign out";return}KC.signOut()}}}
   {const cur={...th};const sync=()=>{w.querySelectorAll("[data-thc]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.thc===cur.c)));w.querySelectorAll("[data-thm]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.thm===(cur.m||"auto"))))};
@@ -1641,7 +1642,7 @@ async function genReview(btn){
   btn.disabled=true;btn.textContent="Writing…";
   const days=[];for(let d=ws;d<=we&&d<=t;d=addDays(d,1)){const x=totals(dayFoods(d)),c=checks(d);days.push(`${d} ${fmtDate(d,{weekday:"short"})}: ${x.cal} cal, ${x.p}g protein, food complete ${c.food?"yes":"no"}, weigh-in ${S.weights[d]?r1(S.weights[d].kg)+"kg":"none"}, training ${doneOn(d).map(w=>w.title+(isCardio(w)?" ("+cardioTxt(w)+")":"")).join(", ")||(S.plan[d]?"missed "+S.plan[d].name:"rest")}${habitsOn().length?", habits "+habitsOn().map(([k,l,u])=>`${l} ${habitVal(d,k)}${u}`).join(" "):""}`)}
   const prompt=`${rules()}\n\nWrite ${nm}'s weekly review for ${ws} to ${we}.\n\nTHEIR CURRENT DATA:\n${context()}\n\nDay by day:\n${days.join("\n")}\n\nFormat: plain text, no headings or markdown, never use em dashes, under 180 words.\nStart with a one-line verdict.\nThen short lines starting "Food:", "Training:", "Weight:" and "Habits:" covering what went well and what didn't, with numbers.\nFinish with "Focus this week:" and one specific, doable target.`;
-  try{const {text}=await sample(prompt,{cache:false});const doc={text:text.slice(0,3000),created:Date.now()};S.reviews[ws]=doc;S.reviewOpen=true;write("reviews/"+ws,r=>r.set(doc));render()}
+  try{const {text}=await sample(prompt,{cache:false,modelTier:coachTier()});const doc={text:text.slice(0,3000),created:Date.now()};S.reviews[ws]=doc;S.reviewOpen=true;write("reviews/"+ws,r=>r.set(doc));render()}
   catch(e){toast(sampleErr(e));btn.disabled=false;btn.textContent="Write it"}
 }
 const HAB=[["water","Water","L"],["steps","Steps",""],["sleep","Sleep","h"]];
@@ -2271,6 +2272,7 @@ function renderWeight(){
 
 /* ---------- COACH ---------- */
 let coachBusy=false,coachCtl=null,draft="";
+const coachTier=()=>S.settings.coachCheap?"quick":"main";
 function context(){
   const st=S.settings,t=today(),lines=[];
   lines.push(`Today: ${fmtDate(t,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}. ${st.goalDate?`Goal date ${st.goalDate} (${daysBetween(t,st.goalDate)} days away).`:"No target date set."} Starting weight ${st.startKg}kg.`);
@@ -2292,14 +2294,36 @@ function context(){
   if(S.recipes.length)lines.push("Their recipes: "+S.recipes.map(r=>`${r.name} (${r.per.cal} cal, ${r.per.p}p per serve)`).join("; ")+".");
   lines.push(`Today's checklist: weigh-in ${ck.weigh?"done":"not yet"}, food marked complete ${ck.food?"yes":"not yet"}, training ${ck.rest?"rest day":ck.train?"done":"not yet"}. Checklist streak: ${streak()} days.`);
   if(S.program)lines.push(`Current training plan: ${S.program.name}, ${S.program.weeks} weeks from ${S.program.start}. ${S.program.summary} Progression: ${S.program.progression}`);
-  lines.push(`Adaptive expenditure estimate: ${x.est} cal/day (confidence ${Math.round(x.conf*100)}%, from ${x.logged} complete days out of the last ${x.span}). Suggested target for his chosen pace: ${x.target} cal.`);
+  lines.push(x.conf>0.05?`App's burn (maintenance) estimate: ${x.est} cal/day, ${Math.round(x.conf*100)}% based on his own complete days and weight trend since ${waterPhaseEnd()}, the rest on a height/age/activity formula. Suggested target for his chosen pace: ${x.target} cal.`:`App's burn (maintenance) estimate: ${x.est} cal/day, from a height/age/activity formula only. The first two weeks of a diet (until ${waterPhaseEnd()}) are water and glycogen loss, so the app does not use them to measure his burn; it needs about 7 complete days and 4 weigh-ins after that. Do not work out your own maintenance figure from early weight loss. Suggested target for his chosen pace: ${x.target} cal.`);
+  lines.push(keyNumbers());
   const up=Object.keys(S.plan).filter(d=>d>=t&&d<=addDays(t,7)).sort();
   lines.push(`Planned sessions next 7 days: ${up.map(d=>d+" "+S.plan[d].name).join("; ")||"none"}. Saved workouts: ${S.templates.map(x=>x.name+" ("+(x.exercises||[]).map(e=>e.name).join(", ")+")").join("; ")||"none"}.`);
   return lines.join("\n");
 }
+/* Numbers the coach should quote, worked out here so the model never has to do arithmetic. */
+function keyNumbers(){
+  const t=today(),L=[],wk=Object.keys(S.weights).filter(d=>S.weights[d]&&S.weights[d].kg&&d<=t).sort(),kg=d=>+S.weights[d].kg;
+  const sgn=v=>(v>0?"+":v<0?"-":"±")+Math.abs(r1(v))+" kg";
+  if(wk.length){const a=wk[wk.length-1];L.push(`Latest weigh-in: ${r1(kg(a))} kg on ${a}${a===t?" (today)":""}.`);
+    if(wk.length>1){const b=wk[wk.length-2];L.push(`Change from previous weigh-in (${r1(kg(b))} kg on ${b}): ${sgn(kg(a)-kg(b))}.`)}
+    const avgIn=(f,to)=>{const v=wk.filter(d=>d>f&&d<=to).map(kg);return v.length?{v:v.reduce((x,y)=>x+y,0)/v.length,n:v.length}:null};
+    const w1=avgIn(addDays(t,-7),t),w0=avgIn(addDays(t,-14),addDays(t,-7));
+    if(w1)L.push(`Average weigh-in last 7 days: ${r1(w1.v)} kg (${w1.n} weigh-ins)${w0?`, the 7 days before: ${r1(w0.v)} kg (${w0.n}), change ${sgn(w1.v-w0.v)}`:""}.`);
+    const tr=trendSeries(),now=tr.length?tr[tr.length-1]:null,at=d=>{let p=null;for(const q of tr){if(q.d<=d)p=q;else break}return p};
+    if(now){const p7=at(addDays(now.d,-7)),p14=at(addDays(now.d,-14));L.push(`Smoothed trend weight: ${r1(now.trend)} kg${p7?`, ${sgn(now.trend-p7.trend)} over 7 days`:""}${p14?`, ${sgn(now.trend-p14.trend)} over 14 days`:""}. The trend lags the scale on purpose; when the scale is well below it, the trend will keep falling over the next week or two.`)}
+    const s=+S.settings.startKg;if(s)L.push(`Total change since start (${s} kg): ${sgn(kg(a)-s)}.`)}
+  const cd=[1,2,3,4,5,6,7].map(i=>addDays(t,-i)).filter(d=>dayComplete(d)&&dayFoods(d).length).map(d=>totals(dayFoods(d)));
+  const st=S.settings;
+  if(cd.length){const ac=cd.reduce((a,x)=>a+x.cal,0)/cd.length,ap=cd.reduce((a,x)=>a+x.p,0)/cd.length;L.push(`Complete days in the last 7: ${cd.length}. Average on those days: ${Math.round(ac)} cal (${Math.round(ac-st.cal)>=0?"+":""}${Math.round(ac-st.cal)} vs target), ${Math.round(ap)}g protein (target ${st.p}g).`)}
+  else L.push("Complete days in the last 7: none, so there is no reliable intake average this week.");
+  const tt=totals(dayFoods(t));L.push(`Left today: ${Math.round(st.cal-tt.cal)} cal and ${Math.round(st.p-tt.p)}g protein (negative means over).`);
+  return "KEY NUMBERS (already calculated by the app, these are correct):\n"+L.map(x=>"- "+x).join("\n");
+}
 function rules(){const n=S.settings.name?String(S.settings.name).split(" ")[0]:"the user";return `You are ${n}'s personal trainer and nutrition coach, built into their food, training and weight tracking app. You can see their logged data below. A day only counts as a full day of eating when it is marked COMPLETE. PARTIAL days are just what got logged. A partial day could be a light day or a big day or blow-out that was not fully logged, so do not assume either: never treat it as their total intake, never say they under-ate or had a big deficit because of one, and leave partial days out of averages. If weight jumps after partial days, untracked eating, salt and carbs are the likely reasons, so say that plainly rather than suggesting their metabolism changed. If a partial day matters to your advice, ask what else they ate. Today is still in progress, so treat it as so far. Coach like a good in-person PT: direct, specific, encouraging without flattery, and honest when they are off track. Call them ${n}.
 Rules:
 - Ground advice in their actual numbers. Mention specific figures when useful.
+- Use the KEY NUMBERS exactly as given for weight changes, averages and what's left today. Do not do your own subtraction, averaging or maintenance maths; if you truly need a new figure, show the sum so it can be checked. Never contradict the KEY NUMBERS.
+- If they question a figure, check it against the data before agreeing or disagreeing. Don't just apologise.
 - Evidence-based. Fat loss target around 0.5 to 1% of bodyweight per week. Keep protein high and keep lifting to hold muscle. The first 1 to 2 weeks of a deficit drop extra water and glycogen, so fast early losses are not all fat: never cut calories or steps because of them, and expect the rate to slow after that.
 - Do not recommend crash diets, very low calorie intakes, fasting extremes, dehydration or sauna tricks to drop weight. If they regularly eat far below target, say so and steer them back up.
 - For pain, injury, dizziness or medical questions, give sensible general guidance and suggest a GP or physio.
@@ -2342,7 +2366,7 @@ async function send(text){
   const input=[{role:"user",content:"THEIR CURRENT DATA:\n"+context()},...turns];
   const changes=[];let canTools=false;
   try{const l=await sample.limits();canTools=!!(l&&l.tools)}catch(e){}
-  const opts={cache:false,system:rules(),signal:coachCtl.signal,onText:({text})=>{liveText=text;const l=$("#live");if(l){l.hidden=false;l.innerHTML=mdLite(text);l.scrollIntoView({block:"end"})}}};
+  const opts={cache:false,modelTier:coachTier(),system:rules(),signal:coachCtl.signal,onText:({text})=>{liveText=text;const l=$("#live");if(l){l.hidden=false;l.innerHTML=mdLite(text);l.scrollIntoView({block:"end"})}}};
   if(canTools)opts.tools=coachTools(changes);
   try{
     const {text:ans}=await sample(input,opts);
